@@ -134,6 +134,10 @@ nav.tabs div{max-width:560px;margin:0 auto;display:grid;grid-template-columns:re
 .reward{background:var(--brass);color:#fff;border-radius:12px;padding:12px;display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap}
 .reward label{display:flex;gap:8px;align-items:center;font-weight:700}
 .reward input{width:22px;height:22px;min-height:0}
+.sug{position:absolute;left:0;right:52px;top:calc(100% + 4px);z-index:15;background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.18);max-height:300px;overflow:auto}
+.sug button{display:flex;width:100%;justify-content:space-between;align-items:center;gap:10px;border:0;background:transparent;padding:12px 14px;text-align:left;cursor:pointer;border-bottom:1px solid var(--line)}
+.sug button:last-child{border-bottom:0}.sug button:hover,.sug button:focus-visible{background:var(--surface-2)}
+.sug b{font-weight:600}.sug mark{background:none;color:var(--accent);font-weight:800}.sug small{color:var(--muted);font-size:12px;white-space:nowrap}
 .dot.brinde{background:var(--brass)} .row .val.brinde{color:var(--brass)}
 nav.tabs button{border:0;background:transparent;padding:10px 4px 12px;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:12px;font-weight:600;color:var(--muted);cursor:pointer}
 nav.tabs button svg{width:22px;height:22px}
@@ -170,8 +174,10 @@ nav.tabs button[aria-current=page]{color:var(--accent)}
     <div id="boxIn" style="display:flex;flex-direction:column;gap:16px">
       <div>
         <div style="margin-bottom:14px"><h3>Cliente (cartão fidelidade)</h3>
-          <div style="display:flex;gap:8px"><input type="text" id="cliPick" list="cliList" placeholder="Opcional · digite o nome" autocomplete="off" style="flex:1;min-width:0"><button class="btn ghost" id="cliClear" style="min-height:44px;padding:8px 12px" aria-label="Limpar cliente">×</button></div>
-          <datalist id="cliList"></datalist>
+          <div style="position:relative">
+            <div style="display:flex;gap:8px"><input type="text" id="cliPick" placeholder="Opcional · digite o nome" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="cliSug" style="flex:1;min-width:0"><button class="btn ghost" id="cliClear" style="min-height:44px;padding:8px 12px" aria-label="Limpar cliente">×</button></div>
+            <div class="sug" id="cliSug" role="listbox" hidden></div>
+          </div>
           <div id="cliInfo" style="margin-top:8px;font-size:13px"></div>
         </div>
         <div id="barbWrap" style="margin-bottom:14px"><h3>Quem atendeu</h3><div class="chips" id="barbChips"></div></div>
@@ -556,13 +562,25 @@ function renderCom(all){
 }
 function selectedClient(){const v=($("cliPick").value||"").trim().toLowerCase();if(!v)return null;return clients().find(c=>c.n.toLowerCase()===v)||null}
 function renderCliPick(){
-  const cl=clients();$("cliList").innerHTML=cl.map(c=>`<option value="${esc(c.n)}">`).join("");
   const v=($("cliPick").value||"").trim(),c=selectedClient(),f=fid();
   if(!v){$("cliInfo").innerHTML="";return}
   if(!c){$("cliInfo").innerHTML=`<button class="btn ghost" id="cliQuick" style="min-height:36px;padding:6px 12px">+ Cadastrar "${esc(v)}"</button>`;return}
   const si=stampInfo(c.id);
   $("cliInfo").innerHTML=si.ready?`<div class="reward"><span>${esc(c.n)} completou ${f.meta} selos!</span><label><input type="checkbox" id="useFree"> Usar ${esc(f.gratis)} grátis agora</label></div>`
     :`<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">${stampsHTML(si.cur,f.meta)}<span style="color:var(--muted)">${si.cur} de ${f.meta} · faltam ${f.meta-si.cur}</span></div>`;
+}
+function norm(t){return String(t).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"")}
+function showSug(){
+  const v=norm(($("cliPick").value||"").trim()),f=fid(),cl=clients(),box=$("cliSug");
+  if(!cl.length||(v&&selectedClient()&&norm(selectedClient().n)===v)){box.hidden=true;$("cliPick").setAttribute("aria-expanded","false");return}
+  let list=cl.map(c=>({c,k:norm(c.n)})).filter(x=>!v||x.k.includes(v)||x.k.split(" ").some(w=>w.startsWith(v)));
+  list.sort((a,b)=>(b.k.startsWith(v)-a.k.startsWith(v))||a.k.localeCompare(b.k));
+  list=list.slice(0,8);
+  if(!list.length){box.hidden=true;$("cliPick").setAttribute("aria-expanded","false");return}
+  box.innerHTML=list.map(({c,k})=>{const si=stampInfo(c.id),i=v?k.indexOf(v):-1;
+    const name=i>=0?esc(c.n.slice(0,i))+"<mark>"+esc(c.n.slice(i,i+v.length))+"</mark>"+esc(c.n.slice(i+v.length)):esc(c.n);
+    return`<button type="button" role="option" data-pickcli="${c.id}"><b>${name}</b><small>${si.ready?"🎁 grátis disponível":Math.min(si.cur,f.meta)+"/"+f.meta+" selos"}</small></button>`}).join("");
+  box.hidden=false;$("cliPick").setAttribute("aria-expanded","true");
 }
 function renderClientes(){
   const f=fid();$("fidRule").textContent=`A cada ${f.meta} atendimentos (${f.conta.join(", ")||"nenhum serviço marcado"}), o cliente ganha ${f.gratis.toLowerCase()} grátis. O selo entra quando você escolhe o cliente na hora de lançar o serviço.`;
@@ -659,6 +677,7 @@ document.addEventListener("click",async ev=>{
     const e=comEntry({tipo:"in",categoria:"Serviço",descricao:s.n,valor:+s.v,pagamento:state.pay});if(c){e.cliente=c.id;e.clienteNome=c.n}addEntry(e);return}
   if(t.dataset.goday){closeSheet();state.date=t.dataset.goday;state.view="lancar";render();window.scrollTo(0,0);return}
   if(t.dataset.fidc){t.setAttribute("aria-pressed",t.getAttribute("aria-pressed")!=="true");return}
+  if(t.dataset.pickcli){const c=clients().find(x=>x.id===t.dataset.pickcli);if(c){$("cliPick").value=c.n;$("cliSug").hidden=true;$("cliPick").setAttribute("aria-expanded","false");renderCliPick()}return}
   if(t.id==="cliQuick"){const n=$("cliPick").value.trim();if(n){const l=clients();l.push({id:"c"+Date.now().toString(36),n,tel:""});saveClients(l);toast("Cliente "+n+" cadastrado.");render()}return}
   if(t.dataset.rmcli){const box=t.closest(".cli");if(box.querySelector(".confirm"))return;const d=document.createElement("div");d.className="confirm";d.style.gridColumn="1/-1";
     d.innerHTML=`Excluir este cliente? Os lançamentos ficam. <button class="btn danger" data-okcli="${t.dataset.rmcli}" style="min-height:34px;padding:6px 12px">Excluir</button><button class="btn ghost" data-nodel style="min-height:34px;padding:6px 12px">Cancelar</button>`;box.appendChild(d);return}
@@ -686,7 +705,11 @@ function shiftMonth(k){const [y,m]=state.month.split("-").map(Number);const d=ne
 $("mPrev").onclick=()=>shiftMonth(-1);$("mNext").onclick=()=>shiftMonth(1);
 $("shClose").onclick=closeSheet;$("sheetBg").onclick=e=>{if(e.target.id==="sheetBg")closeSheet()};
 document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!$("sheetBg").hidden)closeSheet()});
-$("cliPick").oninput=renderCliPick;$("cliClear").onclick=()=>{$("cliPick").value="";renderCliPick()};
+$("cliPick").oninput=()=>{renderCliPick();showSug()};
+$("cliPick").onfocus=showSug;
+$("cliPick").onkeydown=e=>{if(e.key==="Escape")$("cliSug").hidden=true;if(e.key==="ArrowDown"){const b=$("cliSug").querySelector("button");if(b){e.preventDefault();b.focus()}}};
+$("cliSug").onkeydown=e=>{const b=document.activeElement;if(e.key==="ArrowDown"&&b.nextElementSibling){e.preventDefault();b.nextElementSibling.focus()}if(e.key==="ArrowUp"){e.preventDefault();(b.previousElementSibling||$("cliPick")).focus()}if(e.key==="Escape"){$("cliSug").hidden=true;$("cliPick").focus()}};
+document.addEventListener("pointerdown",e=>{if(!e.target.closest("#cliSug")&&e.target.id!=="cliPick")$("cliSug").hidden=true});$("cliClear").onclick=()=>{$("cliPick").value="";$("cliSug").hidden=true;renderCliPick()};
 $("cliSearch").oninput=renderClientes;
 $("ncAdd").onclick=()=>{const n=$("ncName").value.trim();if(!n){toast("Digite o nome do cliente.");return}
   const l=clients();if(l.some(c=>c.n.toLowerCase()===n.toLowerCase())){toast("Já existe um cliente com esse nome.");return}
