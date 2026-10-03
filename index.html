@@ -86,7 +86,9 @@ input:focus-visible,select:focus-visible,button:focus-visible{outline:2px solid 
 .row{display:grid;grid-template-columns:auto 1fr auto auto;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
 .row:last-child{border-bottom:0}
 .dot{width:8px;height:8px;border-radius:50%}
-.dot.in{background:var(--in)} .dot.out{background:var(--out)}
+.dot.in{background:var(--in)} .dot.out{background:var(--out)} .dot.rep{background:var(--brass)}
+.row .val.rep{color:var(--brass)}
+.barb{display:grid;grid-template-columns:1fr auto;gap:2px 10px;padding:10px 0;border-bottom:1px solid var(--line)}.barb:last-child{border-bottom:0}.barb small{color:var(--muted);font-size:12px}
 .row .desc{min-width:0}
 .row .desc b{display:block;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .row .desc small{color:var(--muted);font-size:12px}
@@ -153,6 +155,7 @@ nav.tabs button[aria-current=page]{color:var(--accent)}
 
     <div id="boxIn" style="display:flex;flex-direction:column;gap:16px">
       <div>
+        <div id="barbWrap" style="margin-bottom:14px"><h3>Quem atendeu</h3><div class="chips" id="barbChips"></div></div>
         <h3>Forma de pagamento</h3>
         <div class="chips" id="payChips"></div>
       </div>
@@ -209,6 +212,10 @@ nav.tabs button[aria-current=page]{color:var(--accent)}
       <div id="projBox"></div>
     </div>
 
+    <div class="card" id="comCard">
+      <h3>Comissões dos barbeiros</h3>
+      <div id="comBox"></div>
+    </div>
     <div class="card" id="goalCard">
       <h3>Meta de faturamento</h3>
       <div id="goalBox"></div>
@@ -259,6 +266,12 @@ nav.tabs button[aria-current=page]{color:var(--accent)}
       <button class="btn ghost" id="fixAdd" style="margin-top:8px">+ Adicionar despesa fixa</button>
     </div>
     <div class="card">
+      <h2 style="margin-bottom:4px">Barbeiros e comissão</h2>
+      <p style="margin:0 0 10px;color:var(--muted);font-size:13px">Coloque a % que cada um recebe por serviço. O dono fica com 0%. A comissão vale para cortes, barba e demais serviços; produtos vendidos e gorjetas não entram.</p>
+      <div id="barbEdit"></div>
+      <button class="btn ghost" id="barbAdd" style="margin-top:8px">+ Adicionar barbeiro</button>
+    </div>
+    <div class="card">
       <h2 style="margin-bottom:8px">Meta e dias de trabalho</h2>
       <div class="form">
         <label>Meta de faturamento (R$)<input type="number" id="cfgGoal" inputmode="decimal" min="0" step="50"></label>
@@ -299,6 +312,7 @@ const IN_CATS=["Serviço","Produto vendido","Gorjeta","Outros"];
 const OUT_CATS=["Aluguel","Energia","Água","Internet/telefone","Consumíveis (lâminas, gel, toalhas)","Produtos para revenda","Manutenção/equipamentos","Pró-labore/retirada","Impostos/MEI","Outros"];
 const DEFAULT_CFG={
   services:[{n:"Corte",v:35},{n:"Barba",v:25},{n:"Corte + barba",v:55},{n:"Pezinho",v:10},{n:"Sobrancelha",v:10},{n:"Pigmentação",v:40}],
+  barbers:[{n:"Dono",p:0}],
   fixed:[{n:"Aluguel",c:"Aluguel",v:0},{n:"Energia",c:"Energia",v:0},{n:"Internet",c:"Internet/telefone",v:0}],
   goal:0, off:"0"
 };
@@ -308,7 +322,7 @@ const todayISO=()=>{const d=new Date();return d.getFullYear()+"-"+pad(d.getMonth
 const $=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 
-let state={entries:[],cfg:JSON.parse(JSON.stringify(DEFAULT_CFG)),month:todayISO().slice(0,7),date:todayISO(),type:"in",pay:"Pix",view:"lancar",hist:"all",canWrite:true};
+let state={entries:[],cfg:JSON.parse(JSON.stringify(DEFAULT_CFG)),month:todayISO().slice(0,7),date:todayISO(),type:"in",pay:"Pix",barb:0,view:"lancar",hist:"all",canWrite:true};
 
 /* ---------- armazenamento: banco do artifact, com reserva local ---------- */
 const LS="caixa-barbearia-v1";
@@ -355,7 +369,8 @@ function monthInfo(){
   for(let d=1;d<=days;d++){const wd=new Date(y,m-1,d).getDay();if(!off.includes(wd)){work++;if(d<=elapsed)workDone++}}
   return{y,m,days,elapsed,work,workDone};
 }
-function sums(list){let i=0,o=0;list.forEach(e=>e.tipo==="in"?i+=e.valor:o+=e.valor);return{i,o,b:i-o}}
+function sums(list){let i=0,o=0,c=0;list.forEach(e=>{if(e.tipo==="in"){i+=e.valor;c+=e.comissao||0}else if(e.tipo==="out")o+=e.valor});o+=c;return{i,o,c,b:i-o}}
+function barbers(){return (state.cfg.barbers&&state.cfg.barbers.length)?state.cfg.barbers:[{n:"Dono",p:0}]}
 
 /* ---------- render ---------- */
 function render(){
@@ -370,6 +385,9 @@ function renderLancar(){
   $("fDate").value=state.date;
   $("tIn").setAttribute("aria-pressed",state.type==="in");$("tOut").setAttribute("aria-pressed",state.type==="out");
   $("boxIn").hidden=state.type!=="in";$("boxIn").style.display=state.type==="in"?"flex":"none";$("boxOut").hidden=state.type!=="out";
+  const bs=barbers();if(state.barb>=bs.length)state.barb=0;
+  $("barbWrap").hidden=bs.length<2;
+  $("barbChips").innerHTML=bs.map((b,i)=>`<button class="chip" data-barb="${i}" aria-pressed="${i===state.barb}">${esc(b.n)}</button>`).join("");
   $("payChips").innerHTML=PAYS.map(p=>`<button class="chip" data-pay="${p}" aria-pressed="${p===state.pay}">${p}</button>`).join("");
   $("svcGrid").innerHTML=state.cfg.services.map((s,i)=>`<button class="svc" data-svc="${i}" ${state.canWrite?"":"disabled"}><span>${esc(s.n)}</span><b class="num">${brl(s.v)}</b></button>`).join("");
   if(!$("inCat").options.length){$("inCat").innerHTML=IN_CATS.filter(c=>c!=="Serviço").concat("Serviço").map(c=>`<option>${c}</option>`).join("");
@@ -385,9 +403,9 @@ function renderLancar(){
     `<div class="empty">Nenhum lançamento neste dia ainda.<br>Toque num serviço acima a cada cliente atendido.</div>`);
 }
 function rowHTML(e){
-  const sub=[e.categoria,e.pagamento].filter(Boolean).join(" · ");
+  const sub=[e.tipo==="rep"?null:e.categoria,e.barbeiro&&barbers().length>1||e.comissao?e.barbeiro:null,e.pagamento,e.comissao?esc(e.barbeiro)+" "+brl(e.comissao)+" / casa "+brl(e.valor-e.comissao):null].filter(Boolean).join(" · ");
   return `<div class="row"><i class="dot ${e.tipo}"></i><div class="desc"><b>${esc(e.descricao||e.categoria)}</b><small>${esc(sub)}</small></div>
-  <span class="num val ${e.tipo}">${e.tipo==="out"?"−":"+"}${brl(e.valor).replace("R$ ","")}</span>
+  <span class="num val ${e.tipo}">${e.tipo==="in"?"+":"−"}${brl(e.valor).replace("R$ ","")}</span>
   ${state.canWrite?`<button class="x" data-del="${e.id}" aria-label="Apagar lançamento">×</button>`:"<span></span>"}</div>`;
 }
 
@@ -409,7 +427,7 @@ function renderMes(){
     const perWorkDay=mi.workDone?s.i/mi.workDone:0;
     const projIn=s.i+perWorkDay*(mi.work-mi.workDone);
     const projVar=mi.elapsed?variableOut/mi.elapsed*mi.days:variableOut;
-    const projOut=s.o+fixedPending+(projVar-variableOut);
+    const projOut=s.o+fixedPending+(projVar-variableOut)+(s.i?s.c*(projIn/s.i-1):0);
     const projProfit=projIn-projOut;
     const done=mi.elapsed>=mi.days;
     html=`<div class="kv"><span>Média por dia trabalhado</span><span class="num">${brl(perWorkDay)}</span></div>
@@ -431,7 +449,9 @@ function renderMes(){
   // gráfico
   drawChart(mi);
   // categorias
-  $("catOut").innerHTML=catHTML(all.filter(e=>e.tipo==="out"),"categoria","var(--out)");
+  const outList=all.filter(e=>e.tipo==="out").concat(all.filter(e=>e.comissao>0).map(e=>({categoria:"Comissões de barbeiros",valor:e.comissao})));
+  $("catOut").innerHTML=catHTML(outList,"categoria","var(--out)");
+  renderCom(all);
   $("catIn").innerHTML=catHTML(all.filter(e=>e.tipo==="in"),"descricao","var(--in)");
   $("payBox").innerHTML=catHTML(all.filter(e=>e.tipo==="in"),"pagamento","var(--accent)");
 }
@@ -445,7 +465,7 @@ function catHTML(list,key,color){
 function drawChart(mi){
   const W=640,H=200,L=44,R=8,T=10,B=24, days=mi.days;
   const byDay=Array.from({length:days},()=>({i:0,o:0}));
-  state.entries.forEach(e=>{const d=Number(e.data.slice(8))-1;if(byDay[d])byDay[d][e.tipo==="in"?"i":"o"]+=e.valor});
+  state.entries.forEach(e=>{const d=Number(e.data.slice(8))-1;if(!byDay[d])return;if(e.tipo==="in"){byDay[d].i+=e.valor;byDay[d].o+=e.comissao||0}else if(e.tipo==="out")byDay[d].o+=e.valor});
   let max=Math.max(10,...byDay.map(d=>Math.max(d.i,d.o)));
   const step=niceStep(max/4);max=Math.ceil(max/step)*step;
   const y=v=>T+(H-T-B)*(1-v/max), cw=(W-L-R)/days, bw=Math.max(2,cw/2-1.5);
@@ -460,8 +480,23 @@ function drawChart(mi){
 }
 function niceStep(x){const p=Math.pow(10,Math.floor(Math.log10(x)));const n=x/p;return(n<=1?1:n<=2?2:n<=5?5:10)*p}
 
+function renderCom(all){
+  const bs=barbers(), g={};
+  bs.forEach(b=>g[b.n]={n:b.n,p:b.p,at:0,fat:0,com:0,pago:0});
+  all.forEach(e=>{const k=e.barbeiro;if(!k)return;g[k]=g[k]||{n:k,p:null,at:0,fat:0,com:0,pago:0};
+    if(e.tipo==="in"&&e.categoria==="Serviço"){g[k].at++;g[k].fat+=e.valor}
+    if(e.tipo==="in")g[k].com+=e.comissao||0;
+    if(e.tipo==="rep")g[k].pago+=e.valor});
+  const arr=Object.values(g).filter(x=>x.p>0||x.com>0||x.pago>0);
+  $("comCard").hidden=!arr.length&&bs.length<2;
+  if(!arr.length){$("comBox").innerHTML=`<div class="empty" style="padding:8px">Cadastre os barbeiros e a % de cada um em Ajustes.</div>`;return}
+  $("comBox").innerHTML=arr.map(x=>{const falta=Math.round((x.com-x.pago)*100)/100;
+    return`<div class="barb"><b>${esc(x.n)}${x.p!=null?` <small>· ${x.p}%</small>`:""}</b><span class="num ${falta>0?"neg":""}">${falta>0?"a pagar "+brl(falta):"em dia"}</span>
+    <small>${x.at} serviços · faturou ${brl(x.fat)} · parte dele ${brl(x.com)} · parte da casa ${brl(x.fat-x.com)} · já pago ${brl(x.pago)}</small>
+    ${falta>0&&state.canWrite?`<button class="btn ghost" data-pagar="${esc(x.n)}" data-valor="${falta}" style="min-height:34px;padding:6px 12px;font-size:13px">Registrar pagamento</button>`:"<span></span>"}</div>`}).join("");
+}
 function renderHist(){
-  let list=state.entries.slice();if(state.hist!=="all")list=list.filter(e=>e.tipo===state.hist);
+  let list=state.entries.slice();if(state.hist!=="all")list=list.filter(e=>e.tipo===state.hist||(state.hist==="out"&&e.tipo==="rep"));
   document.querySelectorAll("#histFilter .chip").forEach(c=>c.setAttribute("aria-pressed",c.dataset.f===state.hist));
   if(!list.length){$("histList").innerHTML=`<div class="card empty">Nenhum lançamento neste mês.</div>`;return}
   const by={};list.forEach(e=>(by[e.data]=by[e.data]||[]).push(e));
@@ -477,12 +512,15 @@ function renderAjustesOnce(){
   cfgShownFrom=state.cfg;draft=JSON.parse(JSON.stringify(state.cfg));drawAjustes();
 }
 function drawAjustes(){
+  if(!draft.barbers||!draft.barbers.length)draft.barbers=[{n:"Dono",p:0}];
+  $("barbEdit").innerHTML=draft.barbers.map((b,i)=>`<div class="edit-row"><input type="text" id="bn${i}" value="${esc(b.n)}" aria-label="Nome do barbeiro" placeholder="Nome"><label style="display:flex;align-items:center;gap:4px"><input type="number" id="bp${i}" value="${b.p}" min="0" max="100" step="1" inputmode="decimal" aria-label="Porcentagem de comissão">%</label><button class="x" data-rmbarb="${i}" aria-label="Remover barbeiro" ${draft.barbers.length<2?"disabled":""}>×</button></div>`).join("");
   $("svcEdit").innerHTML=draft.services.map((s,i)=>`<div class="edit-row"><input type="text" id="sn${i}" value="${esc(s.n)}" aria-label="Nome do serviço"><input type="number" id="sv${i}" value="${s.v}" min="0" step="1" inputmode="decimal" aria-label="Preço"><button class="x" data-rmsvc="${i}" aria-label="Remover serviço">×</button></div>`).join("");
   $("fixEdit").innerHTML=draft.fixed.map((f,i)=>`<div class="edit-row" style="grid-template-columns:1fr 110px 40px"><select id="fc${i}" aria-label="Categoria">${OUT_CATS.map(c=>`<option ${c===f.c?"selected":""}>${c}</option>`).join("")}</select><input type="number" id="fv${i}" value="${f.v}" min="0" step="1" inputmode="decimal" aria-label="Valor mensal"><button class="x" data-rmfix="${i}" aria-label="Remover despesa fixa">×</button></div>`).join("");
   $("cfgGoal").value=draft.goal||"";$("cfgOff").value=draft.off||"";
   $("cfgSave").disabled=!state.canWrite;
 }
 function readDraft(){
+  draft.barbers=draft.barbers.map((b,i)=>({n:$("bn"+i).value.trim()||"Barbeiro "+(i+1),p:Math.min(100,Math.max(0,+$("bp"+i).value||0))}));
   draft.services=draft.services.map((s,i)=>({n:$("sn"+i).value.trim()||"Serviço",v:+$("sv"+i).value||0}));
   draft.fixed=draft.fixed.map((f,i)=>({n:$("fc"+i).value,c:$("fc"+i).value,v:+$("fv"+i).value||0}));
   draft.goal=+$("cfgGoal").value||0;draft.off=$("cfgOff").value;
@@ -508,7 +546,10 @@ document.addEventListener("click",async ev=>{
   const t=ev.target.closest("button");if(!t)return;
   if(t.dataset.v){state.view=t.dataset.v;render();window.scrollTo(0,0);return}
   if(t.dataset.pay){state.pay=t.dataset.pay;renderLancar();return}
-  if(t.dataset.svc){const s=state.cfg.services[+t.dataset.svc];addEntry({tipo:"in",categoria:"Serviço",descricao:s.n,valor:+s.v,pagamento:state.pay});return}
+  if(t.dataset.barb){state.barb=+t.dataset.barb;renderLancar();return}
+  if(t.dataset.svc){const s=state.cfg.services[+t.dataset.svc];addEntry(comEntry({tipo:"in",categoria:"Serviço",descricao:s.n,valor:+s.v,pagamento:state.pay}));return}
+  if(t.dataset.pagar){addEntry({tipo:"rep",categoria:"Comissão paga",descricao:"Pagamento de comissão · "+t.dataset.pagar,barbeiro:t.dataset.pagar,valor:+t.dataset.valor,pagamento:"",data:todayISO()});return}
+  if(t.dataset.rmbarb){readDraft();draft.barbers.splice(+t.dataset.rmbarb,1);drawAjustes();return}
   if(t.dataset.del){const row=t.closest(".row");if(row.querySelector(".confirm"))return;
     const box=document.createElement("div");box.className="confirm";box.style.gridColumn="1/-1";
     box.innerHTML=`Apagar este lançamento? <button class="btn danger" data-okdel="${t.dataset.del}" style="min-height:34px;padding:6px 12px">Apagar</button><button class="btn ghost" data-nodel style="min-height:34px;padding:6px 12px">Cancelar</button>`;row.appendChild(box);return}
@@ -522,11 +563,13 @@ $("toastUndo").onclick=async()=>{if(lastId){const id=lastId;lastId=null;$("toast
 $("tIn").onclick=()=>{state.type="in";renderLancar()};
 $("tOut").onclick=()=>{state.type="out";renderLancar()};
 $("fDate").onchange=e=>{if(!e.target.value)return;state.date=e.target.value;if(state.date.slice(0,7)!==state.month){state.month=state.date.slice(0,7);subscribeMonth()}render()};
-$("inAdd").onclick=()=>{addEntry({tipo:"in",categoria:$("inCat").value,descricao:$("inDesc").value.trim()||$("inCat").value,valor:+$("inVal").value,pagamento:state.pay});$("inDesc").value="";$("inVal").value=""};
+function comEntry(e){const b=barbers()[state.barb]||barbers()[0];e.barbeiro=b.n;if(e.categoria==="Serviço"&&b.p>0)e.comissao=Math.round(e.valor*b.p)/100;return e}
+$("inAdd").onclick=()=>{addEntry(comEntry({tipo:"in",categoria:$("inCat").value,descricao:$("inDesc").value.trim()||$("inCat").value,valor:+$("inVal").value,pagamento:state.pay}));$("inDesc").value="";$("inVal").value=""};
 $("outAdd").onclick=()=>{addEntry({tipo:"out",categoria:$("outCat").value,descricao:$("outDesc").value.trim()||$("outCat").value,valor:+$("outVal").value,pagamento:$("outPay").value});$("outDesc").value="";$("outVal").value=""};
 function shiftMonth(k){const [y,m]=state.month.split("-").map(Number);const d=new Date(y,m-1+k,1);state.month=d.getFullYear()+"-"+pad(d.getMonth()+1);
   const t=todayISO();state.date=t.slice(0,7)===state.month?t:state.month+"-01";subscribeMonth();render()}
 $("mPrev").onclick=()=>shiftMonth(-1);$("mNext").onclick=()=>shiftMonth(1);
+$("barbAdd").onclick=()=>{readDraft();draft.barbers.push({n:"",p:40});drawAjustes();$("bn"+(draft.barbers.length-1)).focus()};
 $("svcAdd").onclick=()=>{readDraft();draft.services.push({n:"",v:0});drawAjustes();$("sn"+(draft.services.length-1)).focus()};
 $("fixAdd").onclick=()=>{readDraft();draft.fixed.push({n:"Outros",c:"Outros",v:0});drawAjustes()};
 $("cfgSave").onclick=async()=>{readDraft();try{await store.saveCfg(draft);state.cfg=draft;cfgShownFrom=draft;draft=JSON.parse(JSON.stringify(draft));$("cfgMsg").textContent="Ajustes salvos.";render()}catch(e){$("cfgMsg").textContent="Não foi possível salvar. Tente de novo."}};
