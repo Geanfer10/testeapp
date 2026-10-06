@@ -142,6 +142,7 @@ nav.tabs div{max-width:560px;margin:0 auto;display:grid;grid-template-columns:re
 .remind small{color:var(--muted);font-size:12px}
 .wa{display:inline-flex;align-items:center;gap:6px;background:#1F9D55;color:#fff;text-decoration:none;border-radius:10px;padding:9px 14px;font-weight:700;font-size:14px;min-height:40px}
 .wa svg{width:18px;height:18px}
+.wa.sm{padding:5px 10px;min-height:32px;font-size:12px}.wa.sm svg{width:15px;height:15px}
 .badge{position:absolute;top:4px;left:calc(50% + 6px);background:var(--out);color:#fff;font-size:10px;font-weight:800;min-width:17px;height:17px;border-radius:9px;display:flex;align-items:center;justify-content:center;padding:0 4px}
 nav.tabs button{position:relative;min-width:0;font-size:11px!important;padding-inline:2px!important}
 textarea{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 12px;width:100%;font:inherit;color:inherit;resize:vertical;min-height:110px}
@@ -355,7 +356,8 @@ nav.tabs button[aria-current=page]{color:var(--accent)}
       <div class="form">
         <label>Avisar depois de (dias)<input type="number" id="remDias" min="3" max="120" step="1" inputmode="numeric"></label>
         <label style="justify-content:flex-end"><span style="display:flex;align-items:center;gap:8px;color:var(--fg);font-size:14px;font-weight:500;min-height:44px"><input type="checkbox" id="remOn" style="width:20px;height:20px;min-height:0"> Lembretes ativos</span></label>
-        <label class="full">Mensagem<textarea id="remMsg"></textarea></label>
+        <label class="full">Mensagem do lembrete (15 dias)<textarea id="remMsg"></textarea></label>
+        <label class="full">Mensagem do botão WhatsApp da contagem (envio a qualquer momento)<textarea id="remFree" style="min-height:70px"></textarea></label>
       </div>
     </div>
     <div class="card">
@@ -408,7 +410,7 @@ const DEFAULT_CFG={
   fixed:[{n:"Aluguel",c:"Aluguel",v:0},{n:"Energia",c:"Energia",v:0},{n:"Internet",c:"Internet/telefone",v:0}],
   goal:0, off:"0",
   fid:{meta:10,gratis:"Corte",conta:["Corte","Corte + barba"],com:true},
-  lembrete:{on:true,dias:15,msg:"Fala, {nome}! Tudo certo? Já faz {dias} dias do seu último corte aqui na Sholla Barbearia 💈\n\nBora deixar o visual em dia? Me responde aqui que eu separo um horário pra você.\n\nSeu cartão fidelidade está com {selos} selos, faltam {faltam} pro corte grátis!"}
+  lembrete:{on:true,dias:15,msg:"Fala, {nome}! Tudo certo? Já faz {dias} dias do seu último corte aqui na Sholla Barbearia 💈\n\nBora deixar o visual em dia? Me responde aqui que eu separo um horário pra você.\n\nSeu cartão fidelidade está com {selos} selos, faltam {faltam} pro corte grátis!",livre:"Fala, {nome}! Tudo certo? Aqui é da Sholla Barbearia 💈 "}
 };
 const brl=v=>(v<0?"−":"")+"R$ "+Math.abs(v).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2});
 const pad=n=>String(n).padStart(2,"0");
@@ -442,6 +444,8 @@ function pendingReminders(){const L=lem(),t=todayISO();if(!L.on)return[];
     if(daysBetween(lc,t)<L.dias)return false;
     if(c.lembrado&&c.lembrado>=lc&&daysBetween(c.lembrado,t)<L.dias)return false;
     return true}).map(x=>Object.assign(x,{since:daysBetween(x.lc,t)})).sort((a,b)=>b.since-a.since)}
+function waFree(c){const f=fid(),si=stampInfo(c.id),cur=Math.min(si.cur,f.meta),lc=lastCut(c.id),dias=lc?daysBetween(lc,todayISO()):0;
+  return (lem().livre||DEFAULT_CFG.lembrete.livre).replace(/\{nome\}/g,c.n.split(" ")[0]).replace(/\{dias\}/g,dias).replace(/\{selos\}/g,cur).replace(/\{faltam\}/g,Math.max(0,f.meta-cur))}
 function waText(c,si,since){const f=fid(),L=lem(),cur=Math.min(si.cur,f.meta);
   return L.msg.replace(/\{nome\}/g,c.n.split(" ")[0]).replace(/\{dias\}/g,since).replace(/\{selos\}/g,cur).replace(/\{faltam\}/g,Math.max(0,f.meta-cur))}
 const WA_ICON='<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm0 18.2c-1.5 0-3-.4-4.3-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8s-.4-.1-.6.1-.7.8-.8 1-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.3-.4.2-.4.7-1.4.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.7 11.8 11.8 0 0 0 4.5 4c1.7.7 2.4.8 3.2.6.5-.1 1.5-.6 1.7-1.2s.2-1.1.2-1.2-.2-.2-.5-.3z"/></svg>';
@@ -642,8 +646,10 @@ function renderReminders(){
   const next=all.filter(x=>x.since<L.dias).sort((a,b)=>(b.since-a.since)||a.c.n.localeCompare(b.c.n));
   $("nextCount").textContent=next.length?next.length+" cliente"+(next.length>1?"s":""):"";
   $("nextList").innerHTML=next.length?next.map(x=>{const f=L.dias-x.since,pct=Math.max(4,Math.min(100,x.since/L.dias*100));
-    return`<div class="cd ${f<=3?"soon":""}"><div style="min-width:0"><b style="font-weight:600">${esc(x.c.n)}</b><br><small>último corte ${x.lc.split("-").reverse().slice(0,2).join("/")} · há ${x.since} dia${x.since===1?"":"s"}${waNumber(x.c.tel)?"":` · <span style="color:var(--warn)">sem WhatsApp</span>`}</small></div>
-    <span class="num left">${f===1?"falta 1 dia":"faltam "+f+" dias"}</span><div class="bar"><i style="width:${pct}%"></i></div></div>`}).join("")
+    return`<div class="cd ${f<=3?"soon":""}"><div style="min-width:0"><b style="font-weight:600">${esc(x.c.n)}</b><br><small>último corte ${x.lc.split("-").reverse().slice(0,2).join("/")} · há ${x.since} dia${x.since===1?"":"s"}</small></div>
+    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px"><span class="num left">${f===1?"falta 1 dia":"faltam "+f+" dias"}</span>
+    ${waNumber(x.c.tel)?`<a class="wa sm" href="https://wa.me/${waNumber(x.c.tel)}?text=${encodeURIComponent(waFree(x.c))}" target="_blank" rel="noopener">${WA_ICON}WhatsApp</a>`:`<button class="btn ghost" data-addtel="${x.c.id}" style="min-height:30px;padding:4px 10px;font-size:12px">Pôr WhatsApp</button>`}</div>
+    <div class="bar"><i style="width:${pct}%"></i></div></div>`}).join("")
     :`<div class="empty" style="padding:8px">Nenhum cliente em contagem. Lance os cortes escolhendo o nome do cliente para ele aparecer aqui.</div>`;
   const noTel=all.filter(x=>x.since>=L.dias&&!waNumber(x.c.tel)).sort((a,b)=>b.since-a.since);
   $("noTelCard").hidden=!noTel.length;
@@ -707,7 +713,7 @@ function drawAjustes(){
   $("fixEdit").innerHTML=draft.fixed.map((f,i)=>`<div class="edit-row" style="grid-template-columns:1fr 110px 40px"><select id="fc${i}" aria-label="Categoria">${OUT_CATS.map(c=>`<option ${c===f.c?"selected":""}>${c}</option>`).join("")}</select><input type="number" id="fv${i}" value="${f.v}" min="0" step="1" inputmode="decimal" aria-label="Valor mensal"><button class="x" data-rmfix="${i}" aria-label="Remover despesa fixa">×</button></div>`).join("");
   draft.fid=Object.assign({},DEFAULT_CFG.fid,draft.fid||{});
   draft.lembrete=Object.assign({},DEFAULT_CFG.lembrete,draft.lembrete||{});
-  $("remDias").value=draft.lembrete.dias;$("remOn").checked=!!draft.lembrete.on;$("remMsg").value=draft.lembrete.msg;
+  $("remDias").value=draft.lembrete.dias;$("remOn").checked=!!draft.lembrete.on;$("remMsg").value=draft.lembrete.msg;$("remFree").value=draft.lembrete.livre;
   $("fidMeta").value=draft.fid.meta;$("fidCom").checked=!!draft.fid.com;
   $("fidFree").innerHTML=draft.services.map(s=>`<option ${s.n===draft.fid.gratis?"selected":""}>${esc(s.n)}</option>`).join("");
   $("fidCount").innerHTML=draft.services.map(s=>`<button class="chip" data-fidc="${esc(s.n)}" aria-pressed="${draft.fid.conta.includes(s.n)}">${esc(s.n)}</button>`).join("");
@@ -720,7 +726,7 @@ function readDraft(){
   draft.fixed=draft.fixed.map((f,i)=>({n:$("fc"+i).value,c:$("fc"+i).value,v:+$("fv"+i).value||0}));
   draft.fid=Object.assign({},draft.fid,{meta:Math.max(2,Math.round(+$("fidMeta").value||10)),gratis:$("fidFree").value||draft.fid.gratis,com:$("fidCom").checked,
     conta:[...document.querySelectorAll("#fidCount .chip")].filter(c=>c.getAttribute("aria-pressed")==="true").map(c=>c.dataset.fidc)});
-  draft.lembrete={on:$("remOn").checked,dias:Math.min(120,Math.max(3,Math.round(+$("remDias").value||15))),msg:$("remMsg").value.trim()||DEFAULT_CFG.lembrete.msg};
+  draft.lembrete={on:$("remOn").checked,dias:Math.min(120,Math.max(3,Math.round(+$("remDias").value||15))),msg:$("remMsg").value.trim()||DEFAULT_CFG.lembrete.msg,livre:$("remFree").value||DEFAULT_CFG.lembrete.livre};
   draft.goal=+$("cfgGoal").value||0;draft.off=$("cfgOff").value;
 }
 
