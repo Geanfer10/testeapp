@@ -173,6 +173,7 @@ textarea{background:var(--surface);border:1px solid var(--line);border-radius:10
 .hrs small{font-size:10px;color:var(--muted);font-family:var(--f-num)}
 .hrs b{font-size:10px;font-family:var(--f-num);font-weight:600}
 .cli .nm{border:0;background:transparent;padding:0;font:inherit;color:inherit;font-weight:700;cursor:pointer;text-align:left;text-decoration:underline;text-decoration-color:var(--line);text-underline-offset:3px}
+.val .liq{display:block;font-family:var(--f-body);font-size:11px;line-height:1.2;color:var(--muted);font-weight:500;margin-top:2px}.val .liq b{font-family:var(--f-num);font-size:13px;color:var(--in);font-weight:600}
 .dot.brinde{background:var(--brass)} .row .val.brinde{color:var(--brass)}
 nav.tabs button{border:0;background:transparent;padding:10px 4px 12px;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:12px;font-weight:600;color:var(--muted);cursor:pointer}
 nav.tabs button svg{width:22px;height:22px}
@@ -612,7 +613,7 @@ function renderLancar(){
 function rowHTML(e){
   const sub=[e.tipo==="rep"?null:e.categoria,e.barbeiro&&barbers().length>1||e.comissao?e.barbeiro:null,e.pagamento,taxaOf(e)?"taxa "+brl(taxaOf(e)):null,e.comissao?esc(e.barbeiro)+" "+brl(e.comissao)+" / casa "+brl(e.valor-e.comissao):null,e.clienteNome?"👤 "+e.clienteNome:null].filter(Boolean).join(" · ");
   return `<div class="row"><i class="dot ${e.tipo}"></i><div class="desc"><b>${esc(e.descricao||e.categoria)}</b><small>${esc(sub)}</small></div>
-  <span class="num val ${e.tipo}">${e.tipo==="brinde"?"grátis":(e.tipo==="in"?"+":"−")+brl(e.valor).replace("R$ ","")}</span>
+  <span class="num val ${e.tipo}" style="text-align:right">${e.tipo==="brinde"?"grátis":(e.tipo==="in"?"+":"−")+brl(e.valor).replace("R$ ","")}${taxaOf(e)?`<small class="liq">com desconto<br><b>${brl(r2(e.valor-taxaOf(e))).replace("R$ ","")}</b></small>`:""}</span>
   ${state.canWrite?`<button class="x" data-del="${e.id}" aria-label="Apagar lançamento">×</button>`:"<span></span>"}</div>`;
 }
 
