@@ -151,6 +151,15 @@ textarea{background:var(--surface);border:1px solid var(--line);border-radius:10
 .cd .bar{grid-column:1/-1;height:5px;background:var(--surface-2);border-radius:9px;overflow:hidden}.cd .bar i{display:block;height:100%;border-radius:9px;background:var(--accent)}
 .cd.soon .bar i{background:var(--brass)} .cd.soon .left{color:var(--brass)}
 .cd .left{font-weight:700;font-size:13px}
+.bb{display:grid;grid-template-columns:1fr auto;gap:4px 10px;padding:10px 0;border-bottom:1px solid var(--line);align-items:baseline}.bb:last-child{border-bottom:0}
+.bb small{color:var(--muted);font-size:12px}.bb .bar{grid-column:1/-1;height:6px;background:var(--surface-2);border-radius:9px;overflow:hidden}.bb .bar i{display:block;height:100%;border-radius:9px;background:var(--accent)}
+.bb .big{font-family:var(--f-num);font-size:20px;font-weight:600;font-variant-numeric:tabular-nums}
+.bbhead{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:4px 0 6px}
+.bbhead div{background:var(--surface-2);border-radius:10px;padding:8px 10px;display:flex;flex-direction:column}
+.bbhead small{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;font-weight:700}
+.lockbox{display:flex;flex-direction:column;align-items:center;text-align:center;gap:12px;padding:28px 16px}
+.lockbox svg{width:44px;height:44px;color:var(--accent)}
+.lockbox input{max-width:220px;text-align:center;font-size:22px;letter-spacing:.3em;font-family:var(--f-num)}
 .dot.brinde{background:var(--brass)} .row .val.brinde{color:var(--brass)}
 nav.tabs button{border:0;background:transparent;padding:10px 4px 12px;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:12px;font-weight:600;color:var(--muted);cursor:pointer}
 nav.tabs button svg{width:22px;height:22px}
@@ -250,6 +259,10 @@ nav.tabs button[aria-current=page]{color:var(--accent)}
       <div id="projBox"></div>
     </div>
 
+    <div class="card" id="barbCard">
+      <h3>Atendimentos por barbeiro</h3>
+      <div id="barbBox"></div>
+    </div>
     <div class="card" id="comCard">
       <h3>Comissões dos barbeiros</h3>
       <div id="comBox"></div>
@@ -290,6 +303,17 @@ nav.tabs button[aria-current=page]{color:var(--accent)}
   </section>
 
   <!-- AJUSTES -->
+  <section class="view" id="v-lock" hidden>
+    <div class="card lockbox">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+      <h2>Histórico protegido</h2>
+      <p style="margin:0;color:var(--muted);font-size:13px;max-width:300px">Só o responsável pelo app pode ver. Digite a senha para abrir.</p>
+      <input type="password" id="lockPin" inputmode="numeric" autocomplete="off" maxlength="8" aria-label="Senha do histórico">
+      <button class="btn primary" id="lockGo" style="min-width:160px">Abrir histórico</button>
+      <p id="lockMsg" style="margin:0;font-size:13px;color:var(--out);min-height:18px"></p>
+    </div>
+  </section>
+
   <section class="view" id="v-clientes" hidden>
     <div class="card">
       <h2 style="margin-bottom:4px">Cartão fidelidade</h2>
@@ -360,6 +384,18 @@ nav.tabs button[aria-current=page]{color:var(--accent)}
         <label class="full">Mensagem do lembrete (15 dias)<textarea id="remMsg"></textarea></label>
         <label class="full">Mensagem do botão WhatsApp da contagem (envio a qualquer momento)<textarea id="remFree" style="min-height:70px"></textarea></label>
       </div>
+    </div>
+    <div class="card">
+      <h2 style="margin-bottom:4px">Senha do Histórico</h2>
+      <p id="pinStatus" style="margin:0 0 10px;color:var(--muted);font-size:13px"></p>
+      <div class="form">
+        <label id="pinCurWrap" class="full">Senha atual<input type="password" id="pinCur" inputmode="numeric" autocomplete="off" maxlength="8"></label>
+        <label>Nova senha (4 a 8 números)<input type="password" id="pinNew" inputmode="numeric" autocomplete="off" maxlength="8"></label>
+        <label>Repita a nova senha<input type="password" id="pinNew2" inputmode="numeric" autocomplete="off" maxlength="8"></label>
+        <button class="btn primary" id="pinSet">Salvar senha</button>
+        <button class="btn danger" id="pinDel">Remover senha</button>
+      </div>
+      <p id="pinMsg" style="margin:8px 0 0;font-size:13px;color:var(--muted)"></p>
     </div>
     <div class="card">
       <h2 style="margin-bottom:8px">Meta e dias de trabalho</h2>
@@ -450,10 +486,12 @@ function waFree(c){const f=fid(),si=stampInfo(c.id),cur=Math.min(si.cur,f.meta),
 function waText(c,si,since){const f=fid(),L=lem(),cur=Math.min(si.cur,f.meta);
   return L.msg.replace(/\{nome\}/g,c.n.split(" ")[0]).replace(/\{dias\}/g,since).replace(/\{selos\}/g,cur).replace(/\{faltam\}/g,Math.max(0,f.meta-cur))}
 const WA_ICON='<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm0 18.2c-1.5 0-3-.4-4.3-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8s-.4-.1-.6.1-.7.8-.8 1-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.3-.4.2-.4.7-1.4.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.7 11.8 11.8 0 0 0 4.5 4c1.7.7 2.4.8 3.2.6.5-.1 1.5-.6 1.7-1.2s.2-1.1.2-1.2-.2-.2-.5-.3z"/></svg>';
+function contaEff(){const f=fid(),names=state.cfg.services.map(x=>x.n),on=f.conta.filter(n=>names.includes(n));return on.length?on:names}
 function stampInfo(cid){const f=fid(),all=local.read().entries;let paid=0,used=0,last=null;
-  all.forEach(e=>{if(e.cliente!==cid)return;if(e.tipo==="in"&&e.categoria==="Serviço"&&f.conta.includes(e.descricao))paid++;if(e.tipo==="brinde")used++;if(!last||e.data>last)last=e.data});
+  const ce=contaEff();let atend=0;
+  all.forEach(e=>{if(e.cliente!==cid)return;if(e.tipo==="in"&&e.categoria==="Serviço"&&!e.semSelo){atend++;if(ce.includes(e.descricao)||f.conta.includes(e.descricao))paid++}if(e.tipo==="brinde"){used++;atend++}if(!last||e.data>last)last=e.data});
   const cl=clients().find(x=>x.id===cid),prev=Math.max(0,Math.round(+(cl&&cl.ant)||0));
-  const cur=Math.max(0,paid+prev-used*f.meta);return{paid,prev,used,cur,ready:cur>=f.meta,last}}
+  const cur=Math.max(0,paid+prev-used*f.meta);return{paid,prev,used,cur,ready:cur>=f.meta,last,atend}}
 function stampsHTML(n,meta){let h="";for(let i=0;i<meta;i++)h+=`<i class="${i<n?"on":""}"></i>`;return`<div class="stamps" aria-label="${n} de ${meta} selos">${h}</div>`}
 function loadLocal(){
   const d=local.read();
@@ -497,8 +535,9 @@ function render(){
   const mLabel=new Date(state.month+"-15T12:00").toLocaleDateString("pt-BR",{month:"short",year:"numeric"}).replace(".","");
   $("mLabel").textContent=mLabel;
   document.querySelectorAll("section.view").forEach(s=>s.hidden=s.id!=="v-"+state.view);
-  document.querySelectorAll("nav.tabs button").forEach(b=>{if(b.dataset.v===state.view)b.setAttribute("aria-current","page");else b.removeAttribute("aria-current")});
-  renderLancar();renderMes();renderHist();renderClientes();renderReminders();renderAjustesOnce();
+  const navV=state.view==="lock"?"hist":state.view;
+  document.querySelectorAll("nav.tabs button").forEach(b=>{if(b.dataset.v===navV)b.setAttribute("aria-current","page");else b.removeAttribute("aria-current")});
+  renderLancar();renderMes();renderHist();renderClientes();renderReminders();renderAjustesOnce();renderPin();
   if(state.sheetDay)openDay(state.sheetDay);
 }
 
@@ -574,6 +613,7 @@ function renderMes(){
   const outList=all.filter(e=>e.tipo==="out").concat(all.filter(e=>e.comissao>0).map(e=>({categoria:"Comissões de barbeiros",valor:e.comissao})));
   $("catOut").innerHTML=catHTML(outList,"categoria","var(--out)");
   renderCom(all);
+  renderBarbCount(all);
   $("catIn").innerHTML=catHTML(all.filter(e=>e.tipo==="in"),"descricao","var(--in)");
   $("payBox").innerHTML=catHTML(all.filter(e=>e.tipo==="in"),"pagamento","var(--accent)");
 }
@@ -603,6 +643,31 @@ function drawChart(mi){
 }
 function niceStep(x){const p=Math.pow(10,Math.floor(Math.log10(x)));const n=x/p;return(n<=1?1:n<=2?2:n<=5?5:10)*p}
 
+function renderBarbCount(all){
+  const t=todayISO(),g={};
+  barbers().forEach(b=>g[b.n]={n:b.n,mes:0,hoje:0,fat:0,svc:{}});
+  all.forEach(e=>{const isSvc=(e.tipo==="in"&&e.categoria==="Serviço"&&!e.semSelo)||e.tipo==="brinde";if(!isSvc)return;
+    const k=e.barbeiro||"Sem barbeiro";g[k]=g[k]||{n:k,mes:0,hoje:0,fat:0,svc:{}};
+    g[k].mes++;if(e.data===t)g[k].hoje++;if(e.tipo==="in")g[k].fat+=e.valor;
+    const sn=e.tipo==="brinde"?"Grátis (fidelidade)":e.descricao;g[k].svc[sn]=(g[k].svc[sn]||0)+1});
+  const arr=Object.values(g).filter(x=>x.mes>0||barbers().some(b=>b.n===x.n)).sort((a,b)=>b.mes-a.mes);
+  const tot=arr.reduce((a,x)=>a+x.mes,0),totH=arr.reduce((a,x)=>a+x.hoje,0),max=Math.max(1,...arr.map(x=>x.mes));
+  const isCur=state.month===t.slice(0,7);
+  if(!tot){$("barbBox").innerHTML=`<div class="empty" style="padding:8px">Nenhum atendimento neste mês ainda.</div>`;return}
+  $("barbBox").innerHTML=`<div class="bbhead"><div><small>No mês</small><span class="num" style="font-size:18px;font-weight:600">${tot}</span></div>
+    <div><small>${isCur?"Hoje":"Média/dia"}</small><span class="num" style="font-size:18px;font-weight:600">${isCur?totH:(tot/Math.max(1,monthInfo().workDone)).toFixed(1)}</span></div>
+    <div><small>Barbeiros</small><span class="num" style="font-size:18px;font-weight:600">${arr.filter(x=>x.mes).length}</span></div></div>`+
+  arr.map(x=>`<div class="bb"><div style="min-width:0"><b style="font-weight:700">${esc(x.n)}</b>${isCur?` <small>· ${x.hoje} hoje</small>`:""}<br>
+    <small>${Object.entries(x.svc).sort((a,b)=>b[1]-a[1]).map(([k,v])=>esc(k)+" "+v).join(" · ")||"sem atendimentos"}${x.fat?" · "+brl(x.fat):""}</small></div>
+    <span class="big">${x.mes}</span><div class="bar"><i style="width:${x.mes/max*100}%"></i></div></div>`).join("");
+}
+function pinHash(){return local.read().pin||""}
+async function hashPin(p){const txt="sholla-caixa:"+p;
+  try{if(window.crypto&&crypto.subtle){const b=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(txt));return Array.from(new Uint8Array(b)).map(x=>x.toString(16).padStart(2,"0")).join("")}}catch(e){}
+  let h=5381;for(const c of txt)h=((h<<5)+h+c.charCodeAt(0))|0;return "x"+(h>>>0).toString(16)}
+function renderPin(){const on=!!pinHash();
+  $("pinStatus").textContent=on?"O Histórico está protegido por senha. Para trocar ou remover, digite a senha atual.":"Sem senha: qualquer pessoa que usa o app vê o Histórico. Crie uma senha para que só o responsável consiga abrir.";
+  $("pinCurWrap").hidden=!on;$("pinDel").hidden=!on;$("pinSet").textContent=on?"Trocar senha":"Criar senha"}
 function renderCom(all){
   const bs=barbers(), g={};
   bs.forEach(b=>g[b.n]={n:b.n,p:b.p,at:0,fat:0,com:0,pago:0});
@@ -667,12 +732,12 @@ function renderReminders(){
 }
 function markReminded(id){saveClients(clients().map(c=>c.id===id?Object.assign({},c,{lembrado:todayISO()}):c))}
 function renderClientes(){
-  const f=fid();$("fidRule").textContent=`A cada ${f.meta} atendimentos (${f.conta.join(", ")||"nenhum serviço marcado"}), o cliente ganha ${f.gratis.toLowerCase()} grátis. O selo entra quando você escolhe o cliente na hora de lançar o serviço.`;
+  const f=fid();$("fidRule").textContent=`A cada ${f.meta} atendimentos (${contaEff().join(", ")}), o cliente ganha ${f.gratis.toLowerCase()} grátis. O selo entra quando você escolhe o cliente na hora de lançar o serviço.`;
   const q=($("cliSearch").value||"").trim().toLowerCase();
   const list=clients().filter(c=>!q||c.n.toLowerCase().includes(q)||(c.tel||"").includes(q)).map(c=>Object.assign({si:stampInfo(c.id)},c))
     .sort((a,b)=>(b.si.ready-a.si.ready)||(b.si.cur-a.si.cur)||a.n.localeCompare(b.n));
   if(!clients().length){$("cliListView").innerHTML=`<div class="empty">Nenhum cliente cadastrado.<br>Cadastre acima ou direto na tela de lançar, digitando o nome do cliente.</div>`;return}
-  $("cliListView").innerHTML=list.length?list.map(c=>`<div class="cli"><div style="min-width:0"><b>${esc(c.n)}</b> ${c.si.ready?`<small style="color:var(--brass);font-weight:700">· grátis disponível</small>`:""}<br><small>${c.tel?esc(c.tel)+" · ":`<span style="color:var(--warn)">sem telefone</span> · `}${c.si.paid} atendimentos${c.si.prev?" + "+c.si.prev+" antes do app":""} · ${c.si.used} grátis usados${c.si.last?" · última visita "+c.si.last.split("-").reverse().join("/"):""}</small></div>
+  $("cliListView").innerHTML=list.length?list.map(c=>`<div class="cli"><div style="min-width:0"><b>${esc(c.n)}</b> ${c.si.ready?`<small style="color:var(--brass);font-weight:700">· grátis disponível</small>`:""}<br><small>${c.tel?esc(c.tel)+" · ":`<span style="color:var(--warn)">sem telefone</span> · `}${c.si.atend} atendimento${c.si.atend===1?"":"s"} · ${c.si.paid+c.si.prev} selo${c.si.paid+c.si.prev===1?"":"s"}${c.si.prev?" + "+c.si.prev+" antes do app":""} · ${c.si.used} grátis usados${c.si.last?" · última visita "+c.si.last.split("-").reverse().join("/"):""}</small></div>
     <div style="display:flex;gap:2px"><button class="x" data-edcli="${c.id}" aria-label="Editar cliente" style="font-size:15px">✎</button><button class="x" data-rmcli="${c.id}" aria-label="Excluir cliente">×</button></div>
     <div style="grid-column:1/-1;display:flex;align-items:center;gap:10px">${stampsHTML(Math.min(c.si.cur,f.meta),f.meta)}<small>${Math.min(c.si.cur,f.meta)}/${f.meta}</small></div></div>`).join("")
     :`<div class="empty">Nenhum cliente encontrado.</div>`;
@@ -724,12 +789,16 @@ function drawAjustes(){
 }
 function readDraft(){
   draft.barbers=draft.barbers.map((b,i)=>({n:$("bn"+i).value.trim()||"Barbeiro "+(i+1),p:Math.min(100,Math.max(0,+$("bp"+i).value||0))}));
+  const oldNames=draft.services.map(x=>x.n);
   draft.services=draft.services.map((s,i)=>({n:$("sn"+i).value.trim()||"Serviço",v:+$("sv"+i).value||0}));
   draft.fixed=draft.fixed.map((f,i)=>({n:$("fc"+i).value,c:$("fc"+i).value,v:+$("fv"+i).value||0}));
   draft.fid=Object.assign({},draft.fid,{meta:Math.max(2,Math.round(+$("fidMeta").value||10)),gratis:$("fidFree").value||draft.fid.gratis,com:$("fidCom").checked,
     conta:[...document.querySelectorAll("#fidCount .chip")].filter(c=>c.getAttribute("aria-pressed")==="true").map(c=>c.dataset.fidc)});
   draft.lembrete={on:$("remOn").checked,dias:Math.min(120,Math.max(3,Math.round(+$("remDias").value||15))),msg:$("remMsg").value.trim()||DEFAULT_CFG.lembrete.msg,livre:$("remFree").value||DEFAULT_CFG.lembrete.livre};
   draft.goal=+$("cfgGoal").value||0;draft.off=$("cfgOff").value;
+  oldNames.forEach((o,i)=>{const nn=draft.services[i]&&draft.services[i].n;if(!nn||nn===o)return;
+    if(draft.fid.conta.includes(o)&&!draft.fid.conta.includes(nn))draft.fid.conta.push(nn);
+    if(draft.fid.gratis===o)draft.fid.gratis=nn});
 }
 
 /* ---------- ações ---------- */
@@ -753,7 +822,8 @@ document.addEventListener("click",ev=>{const r=ev.target.closest&&ev.target.clos
   const a=ev.target.closest&&ev.target.closest("a[data-sent]");if(a){const id=a.dataset.sent;setTimeout(()=>{markReminded(id);toast("Lembrete marcado como enviado.");render()},800)}});
 document.addEventListener("click",async ev=>{
   const t=ev.target.closest("button");if(!t)return;
-  if(t.dataset.v){state.view=t.dataset.v;render();window.scrollTo(0,0);return}
+  if(t.dataset.v){let v=t.dataset.v;if(v==="hist"&&pinHash()&&!state.histOpen){v="lock";$("lockPin").value="";$("lockMsg").textContent=""}
+    if(v!=="hist")state.histOpen=false;state.view=v;render();window.scrollTo(0,0);if(v==="lock")setTimeout(()=>$("lockPin").focus(),50);return}
   if(t.dataset.pay){state.pay=t.dataset.pay;renderLancar();return}
   if(t.dataset.barb){state.barb=+t.dataset.barb;renderLancar();return}
   if(t.dataset.svc){const s=state.cfg.services[+t.dataset.svc],c=selectedClient(),useFree=$("useFree")&&$("useFree").checked;
@@ -814,6 +884,18 @@ $("cliSearch").oninput=renderClientes;
 $("ncAdd").onclick=()=>{const n=$("ncName").value.trim();if(!n){toast("Digite o nome do cliente.");return}
   const l=clients();if(l.some(c=>c.n.toLowerCase()===n.toLowerCase())){toast("Já existe um cliente com esse nome.");return}
   l.push({id:"c"+Date.now().toString(36),n,tel:$("ncTel").value.trim(),ant:Math.max(0,Math.round(+$("ncAnt").value||0))});saveClients(l);$("ncName").value="";$("ncTel").value="";$("ncAnt").value="";toast("Cliente "+n+" cadastrado.");render()};
+async function tryUnlock(){const p=$("lockPin").value.trim();if(!p)return;
+  if(await hashPin(p)===pinHash()){state.histOpen=true;state.view="hist";$("lockPin").value="";render();window.scrollTo(0,0)}
+  else{$("lockMsg").textContent="Senha incorreta.";$("lockPin").value="";$("lockPin").focus()}}
+$("lockGo").onclick=tryUnlock;$("lockPin").onkeydown=e=>{if(e.key==="Enter")tryUnlock()};
+$("pinSet").onclick=async()=>{const n=$("pinNew").value.trim(),n2=$("pinNew2").value.trim();
+  if(pinHash()&&await hashPin($("pinCur").value.trim())!==pinHash()){$("pinMsg").textContent="A senha atual está errada.";return}
+  if(!/^\d{4,8}$/.test(n)){$("pinMsg").textContent="Use de 4 a 8 números.";return}
+  if(n!==n2){$("pinMsg").textContent="As duas senhas novas não são iguais.";return}
+  const d=local.read();d.pin=await hashPin(n);local.write(d);["pinCur","pinNew","pinNew2"].forEach(i=>$(i).value="");
+  state.histOpen=false;$("pinMsg").textContent="Senha salva. Anote em lugar seguro: sem ela, o Histórico não abre.";renderPin()};
+$("pinDel").onclick=async()=>{if(await hashPin($("pinCur").value.trim())!==pinHash()){$("pinMsg").textContent="Digite a senha atual para remover.";return}
+  const d=local.read();delete d.pin;local.write(d);["pinCur","pinNew","pinNew2"].forEach(i=>$(i).value="");$("pinMsg").textContent="Senha removida. O Histórico está aberto para todos.";renderPin()};
 $("barbAdd").onclick=()=>{readDraft();draft.barbers.push({n:"",p:40});drawAjustes();$("bn"+(draft.barbers.length-1)).focus()};
 $("svcAdd").onclick=()=>{readDraft();draft.services.push({n:"",v:0});drawAjustes();$("sn"+(draft.services.length-1)).focus()};
 $("fixAdd").onclick=()=>{readDraft();draft.fixed.push({n:"Outros",c:"Outros",v:0});drawAjustes()};
