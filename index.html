@@ -104,7 +104,7 @@ input:focus-visible,select:focus-visible,button:focus-visible{outline:2px solid 
 .hero{background:var(--accent);color:var(--accent-fg);border-radius:16px;padding:18px;display:flex;flex-direction:column;gap:12px}
 .hero small{opacity:.8;font-size:12px;text-transform:uppercase;letter-spacing:.08em;font-weight:700}
 .hero .big{font-family:var(--f-num);font-size:32px;font-weight:600;line-height:1.1;font-variant-numeric:tabular-nums}
-.hero .sub{display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:13px}
+.hero .sub{display:grid;grid-template-columns:1fr 1fr;gap:10px 14px;font-size:12px}
 .hero .sub .num{font-size:15px;display:block}
 .meter{height:10px;background:var(--surface-2);border-radius:99px;overflow:hidden;position:relative}
 .meter i{position:absolute;inset:0 auto 0 0;background:var(--brass);border-radius:99px}
@@ -218,6 +218,7 @@ nav.tabs button[aria-current=page]{color:var(--accent)}
         <div id="barbWrap" style="margin-bottom:14px"><h3>Quem atendeu</h3><div class="chips" id="barbChips"></div></div>
         <h3>Forma de pagamento</h3>
         <div class="chips" id="payChips"></div>
+        <p id="payInfo" style="margin:8px 0 0;font-size:12px;color:var(--muted)"></p>
       </div>
       <div>
         <h3>Toque no serviço para lançar</h3>
@@ -253,6 +254,7 @@ nav.tabs button[aria-current=page]{color:var(--accent)}
         <div><small>Saiu</small><span class="num neg" id="dOut"></span></div>
         <div><small>Saldo</small><span class="num" id="dBal"></span></div>
       </div>
+      <p id="dLiq" style="margin:0 0 6px;font-size:12px;color:var(--muted)"></p>
       <div class="list" id="dayList"></div>
     </div>
   </section>
@@ -262,8 +264,10 @@ nav.tabs button[aria-current=page]{color:var(--accent)}
     <div class="hero">
       <div><small>Lucro do mês até agora</small><div class="big" id="mProfit"></div></div>
       <div class="sub">
-        <div>Faturamento<span class="num" id="mIn"></span></div>
-        <div>Despesas<span class="num" id="mOut"></span></div>
+        <div>Faturamento sem descontos<span class="num" id="mIn"></span></div>
+        <div>Com descontos da maquininha<span class="num" id="mLiq"></span></div>
+        <div>Taxas da maquininha<span class="num" id="mTx"></span></div>
+        <div>Despesas (com taxas e comissões)<span class="num" id="mOut"></span></div>
       </div>
     </div>
 
@@ -384,6 +388,14 @@ nav.tabs button[aria-current=page]{color:var(--accent)}
       <button class="btn ghost" id="fixAdd" style="margin-top:8px">+ Adicionar despesa fixa</button>
     </div>
     <div class="card">
+      <h2 style="margin-bottom:4px">Taxas da maquininha</h2>
+      <p style="margin:0 0 10px;color:var(--muted);font-size:13px">Percentual que a maquininha desconta de cada venda. Vale para os próximos lançamentos; os já feitos guardam a taxa da época.</p>
+      <div class="form">
+        <label>Débito (%)<input type="number" id="txDeb" min="0" max="30" step="0.01" inputmode="decimal"></label>
+        <label>Crédito à vista (%)<input type="number" id="txCred" min="0" max="30" step="0.01" inputmode="decimal"></label>
+      </div>
+    </div>
+    <div class="card">
       <h2 style="margin-bottom:4px">Barbeiros e comissão</h2>
       <p style="margin:0 0 10px;color:var(--muted);font-size:13px">Coloque a % que cada um recebe por serviço. O dono fica com 0%. A comissão vale para cortes, barba e demais serviços; produtos vendidos e gorjetas não entram.</p>
       <div id="barbEdit"></div>
@@ -471,6 +483,7 @@ const DEFAULT_CFG={
   fixed:[{n:"Aluguel",c:"Aluguel",v:0},{n:"Energia",c:"Energia",v:0},{n:"Internet",c:"Internet/telefone",v:0}],
   goal:0, off:"0",
   fid:{meta:10,gratis:"Corte",conta:["Corte","Corte + barba"],com:true},
+  taxas:{"Débito":1.89,"Crédito":5.07},
   lembrete:{on:true,dias:15,msg:"Fala, {nome}! Tudo certo? Já faz {dias} dias do seu último corte aqui na Sholla Barbearia 💈\n\nBora deixar o visual em dia? Me responde aqui que eu separo um horário pra você.\n\nSeu cartão fidelidade está com {selos} selos, faltam {faltam} pro corte grátis!",livre:"Fala, {nome}! Tudo certo? Aqui é da Sholla Barbearia 💈 "}
 };
 const brl=v=>(v<0?"−":"")+"R$ "+Math.abs(v).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -525,6 +538,8 @@ function loadLocal(){
 }
 function subscribeMonth(){loadLocal()}
 function boot(){
+  try{const d=local.read();let ch=false;const d0=Object.assign({},DEFAULT_CFG.taxas,(d.cfg&&d.cfg.taxas)||{});
+    d.entries.forEach(e=>{if(e.tipo==="in"&&typeof e.taxa!=="number"){const p=+d0[e.pagamento]||0;if(p>0){e.taxaPct=p;e.taxa=r2(e.valor*p/100);ch=true}}});if(ch)local.write(d)}catch(err){}
   loadLocal();
   try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist()}catch(e){}
   try{localStorage.setItem("_t","1");localStorage.removeItem("_t")}catch(e){const n=$("notice");n.innerHTML="<strong>Atenção:</strong> este navegador não está deixando salvar dados. Abra o app pelo Chrome ou Safari, fora da aba anônima.";n.hidden=false}
@@ -534,7 +549,7 @@ function boot(){
 /* ---------- backup ---------- */
 function baixar(nome,conteudo,tipo){const b=new Blob([conteudo],{type:tipo});const a=document.createElement("a");a.href=URL.createObjectURL(b);a.download=nome;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},500)}
 function backupJSON(){const d=local.read();baixar("caixa-barbearia-backup-"+todayISO()+".json",JSON.stringify(d),"application/json");try{localStorage.setItem(LS+"-ultimo-backup",todayISO())}catch(e){};drawBackupInfo()}
-function exportCSV(){const d=local.read();const rows=[["Data","Tipo","Categoria","Descrição","Pagamento","Valor","Barbeiro","Comissão","Cliente"]].concat(d.entries.sort((a,b)=>a.data<b.data?-1:1).map(e=>[e.data.split("-").reverse().join("/"),({in:"Entrada",out:"Saída",rep:"Pagamento de comissão",brinde:"Cortesia fidelidade"})[e.tipo]||e.tipo,e.categoria,e.descricao,e.pagamento||"",String(e.valor.toFixed(2)).replace(".",","),e.barbeiro||"",e.comissao?String(e.comissao.toFixed(2)).replace(".",","):"",e.clienteNome||""]));
+function exportCSV(){const d=local.read();const rows=[["Data","Tipo","Categoria","Descrição","Pagamento","Valor","Barbeiro","Comissão","Cliente","Taxa maquininha","Valor com descontos"]].concat(d.entries.sort((a,b)=>a.data<b.data?-1:1).map(e=>[e.data.split("-").reverse().join("/"),({in:"Entrada",out:"Saída",rep:"Pagamento de comissão",brinde:"Cortesia fidelidade"})[e.tipo]||e.tipo,e.categoria,e.descricao,e.pagamento||"",String(e.valor.toFixed(2)).replace(".",","),e.barbeiro||"",e.comissao?String(e.comissao.toFixed(2)).replace(".",","):"",e.clienteNome||"",taxaOf(e)?String(taxaOf(e).toFixed(2)).replace(".",","):"",e.tipo==="in"?String(r2(e.valor-taxaOf(e)).toFixed(2)).replace(".",","):""]));
   baixar("caixa-barbearia-"+todayISO()+".csv","\ufeff"+rows.map(r=>r.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(";")).join("\n"),"text/csv")}
 function drawBackupInfo(){let u=null;try{u=localStorage.getItem(LS+"-ultimo-backup")}catch(e){}
   const n=local.read().entries.length;
@@ -551,7 +566,11 @@ function monthInfo(){
   for(let d=1;d<=days;d++){const wd=new Date(y,m-1,d).getDay();if(!off.includes(wd)){work++;if(d<=elapsed)workDone++}}
   return{y,m,days,elapsed,work,workDone};
 }
-function sums(list){let i=0,o=0,c=0;list.forEach(e=>{if(e.tipo==="in"||e.tipo==="brinde"){i+=e.tipo==="in"?e.valor:0;c+=e.comissao||0}else if(e.tipo==="out")o+=e.valor});o+=c;return{i,o,c,b:i-o}}
+function taxas(){return Object.assign({},DEFAULT_CFG.taxas,state.cfg.taxas||{})}
+function r2(v){return Math.round(v*100)/100}
+function taxaOf(e){if(e.tipo!=="in")return 0;if(typeof e.taxa==="number")return e.taxa;const p=+taxas()[e.pagamento]||0;return p?r2(e.valor*p/100):0}
+function pctBR(p){return String(+p).replace(".",",")+"%"}
+function sums(list){let i=0,o=0,c=0,tx=0;list.forEach(e=>{if(e.tipo==="in"||e.tipo==="brinde"){i+=e.tipo==="in"?e.valor:0;c+=e.comissao||0;tx+=taxaOf(e)}else if(e.tipo==="out")o+=e.valor});tx=r2(tx);o+=c+tx;return{i,o,c,tx,liq:r2(i-tx),b:i-o}}
 function barbers(){return (state.cfg.barbers&&state.cfg.barbers.length)?state.cfg.barbers:[{n:"Dono",p:0}]}
 
 /* ---------- render ---------- */
@@ -583,13 +602,15 @@ function renderLancar(){
   $("dayTitle").textContent=isToday?"Hoje":new Date(state.date+"T12:00").toLocaleDateString("pt-BR",{weekday:"long",day:"numeric",month:"long"});
   const list=state.entries.filter(e=>e.data===state.date).sort((a,b)=>(b.criado||0)-(a.criado||0));
   const s=sums(list);
+  $("dLiq").innerHTML=s.tx?`Sem descontos: <b class="num">${brl(s.i)}</b> · maquininha −${brl(s.tx)} · com descontos: <b class="num">${brl(s.liq)}</b>`:"";
+  {const p=+taxas()[state.pay]||0,ex=state.cfg.services[0];$("payInfo").innerHTML=p?`Taxa da maquininha no ${state.pay.toLowerCase()}: <b>${pctBR(p)}</b>${ex?` · ${esc(ex.n)} de ${brl(ex.v)} → entra ${brl(r2(ex.v-ex.v*p/100))}`:""}`:`${state.pay}: sem taxa de maquininha.`}
   $("dIn").textContent=brl(s.i);$("dOut").textContent=brl(s.o);$("dBal").textContent=brl(s.b);$("dBal").className="num "+(s.b>=0?"pos":"neg");
   $("dayList").innerHTML=list.length?list.map(rowHTML).join(""):
     (state.date.slice(0,7)!==state.month?`<div class="empty">Esta data é de outro mês. Mude o mês no topo para ver os lançamentos dela.</div>`:
     `<div class="empty">Nenhum lançamento neste dia ainda.<br>Toque num serviço acima a cada cliente atendido.</div>`);
 }
 function rowHTML(e){
-  const sub=[e.tipo==="rep"?null:e.categoria,e.barbeiro&&barbers().length>1||e.comissao?e.barbeiro:null,e.pagamento,e.comissao?esc(e.barbeiro)+" "+brl(e.comissao)+" / casa "+brl(e.valor-e.comissao):null,e.clienteNome?"👤 "+e.clienteNome:null].filter(Boolean).join(" · ");
+  const sub=[e.tipo==="rep"?null:e.categoria,e.barbeiro&&barbers().length>1||e.comissao?e.barbeiro:null,e.pagamento,taxaOf(e)?"taxa "+brl(taxaOf(e)):null,e.comissao?esc(e.barbeiro)+" "+brl(e.comissao)+" / casa "+brl(e.valor-e.comissao):null,e.clienteNome?"👤 "+e.clienteNome:null].filter(Boolean).join(" · ");
   return `<div class="row"><i class="dot ${e.tipo}"></i><div class="desc"><b>${esc(e.descricao||e.categoria)}</b><small>${esc(sub)}</small></div>
   <span class="num val ${e.tipo}">${e.tipo==="brinde"?"grátis":(e.tipo==="in"?"+":"−")+brl(e.valor).replace("R$ ","")}</span>
   ${state.canWrite?`<button class="x" data-del="${e.id}" aria-label="Apagar lançamento">×</button>`:"<span></span>"}</div>`;
@@ -598,6 +619,7 @@ function rowHTML(e){
 function renderMes(){
   const all=state.entries, s=sums(all), mi=monthInfo(), cfg=state.cfg;
   $("mProfit").textContent=brl(s.b);
+  $("mLiq").textContent=brl(s.liq);$("mTx").textContent="−"+brl(s.tx);
   $("mIn").textContent=brl(s.i);$("mOut").textContent=brl(s.o);
   // projeção
   const fixedTotal=cfg.fixed.reduce((a,f)=>a+(+f.v||0),0);
@@ -613,7 +635,7 @@ function renderMes(){
     const perWorkDay=mi.workDone?s.i/mi.workDone:0;
     const projIn=s.i+perWorkDay*(mi.work-mi.workDone);
     const projVar=mi.elapsed?variableOut/mi.elapsed*mi.days:variableOut;
-    const projOut=s.o+fixedPending+(projVar-variableOut)+(s.i?s.c*(projIn/s.i-1):0);
+    const projOut=s.o+fixedPending+(projVar-variableOut)+(s.i?(s.c+s.tx)*(projIn/s.i-1):0);
     const projProfit=projIn-projOut;
     const done=mi.elapsed>=mi.days;
     html=`<div class="kv"><span>Média por dia trabalhado</span><span class="num">${brl(perWorkDay)}</span></div>
@@ -635,12 +657,12 @@ function renderMes(){
   // gráfico
   drawChart(mi);
   // categorias
-  const outList=all.filter(e=>e.tipo==="out").concat(all.filter(e=>e.comissao>0).map(e=>({categoria:"Comissões de barbeiros",valor:e.comissao})));
+  const outList=all.filter(e=>e.tipo==="out").concat(all.filter(e=>e.comissao>0).map(e=>({categoria:"Comissões de barbeiros",valor:e.comissao}))).concat(all.filter(e=>taxaOf(e)>0).map(e=>({categoria:"Taxas da maquininha",valor:taxaOf(e)})));
   $("catOut").innerHTML=catHTML(outList,"categoria","var(--out)");
   renderCom(all);
   renderKP();
   $("catIn").innerHTML=catHTML(all.filter(e=>e.tipo==="in"),"descricao","var(--in)");
-  $("payBox").innerHTML=catHTML(all.filter(e=>e.tipo==="in"),"pagamento","var(--accent)");
+  $("payBox").innerHTML=payHTML(all.filter(e=>e.tipo==="in"));
 }
 function catHTML(list,key,color){
   if(!list.length)return`<div class="empty" style="padding:8px">Sem lançamentos.</div>`;
@@ -652,7 +674,7 @@ function catHTML(list,key,color){
 function drawChart(mi){
   const W=640,H=200,L=44,R=8,T=10,B=24, days=mi.days;
   const byDay=Array.from({length:days},()=>({i:0,o:0}));
-  state.entries.forEach(e=>{const d=Number(e.data.slice(8))-1;if(!byDay[d])return;if(e.tipo==="in"||e.tipo==="brinde"){byDay[d].i+=e.tipo==="in"?e.valor:0;byDay[d].o+=e.comissao||0}else if(e.tipo==="out")byDay[d].o+=e.valor});
+  state.entries.forEach(e=>{const d=Number(e.data.slice(8))-1;if(!byDay[d])return;if(e.tipo==="in"||e.tipo==="brinde"){byDay[d].i+=e.tipo==="in"?e.valor:0;byDay[d].o+=(e.comissao||0)+taxaOf(e)}else if(e.tipo==="out")byDay[d].o+=e.valor});
   let max=Math.max(10,...byDay.map(d=>Math.max(d.i,d.o)));
   const step=niceStep(max/4);max=Math.ceil(max/step)*step;
   const y=v=>T+(H-T-B)*(1-v/max), cw=(W-L-R)/days, bw=Math.max(2,cw/2-1.5);
@@ -694,6 +716,15 @@ function kpRange(){const k=state.kp,t=todayISO();
   if(k.per==="7d")return[addDays(t,-6),t,"nos últimos 7 dias"];
   if(k.per==="custom"){let a=k.de||t,b=k.ate||a;if(b<a)[a,b]=[b,a];return[a,b,"de "+a.split("-").reverse().join("/")+" a "+b.split("-").reverse().join("/")]}
   const [y,m]=state.month.split("-").map(Number);return[state.month+"-01",state.month+"-"+pad(new Date(y,m,0).getDate()),"no mês"]}
+function payHTML(list){if(!list.length)return`<div class="empty" style="padding:8px">Sem lançamentos.</div>`;
+  const g={};list.forEach(e=>{const k=e.pagamento||"Outros";(g[k]=g[k]||{n:0,b:0,t:0});g[k].n++;g[k].b+=e.valor;g[k].t+=taxaOf(e)});
+  const arr=Object.entries(g).sort((a,b)=>b[1].b-a[1].b),max=arr[0][1].b,tb=arr.reduce((a,x)=>a+x[1].b,0),tt=arr.reduce((a,x)=>a+x[1].t,0);
+  return arr.map(([k,x])=>{const p=+taxas()[k]||0;return`<div class="cat"><span>${esc(k)} <small style="color:var(--muted)">· ${x.n}×${p?" · taxa "+pctBR(p):""}</small></span><span class="num">${brl(x.b)}</span>
+   ${x.t?`<small style="grid-column:1/-1;color:var(--muted);font-size:12px">sem descontos ${brl(x.b)} · maquininha −${brl(r2(x.t))} · <b style="color:var(--fg)">com descontos ${brl(r2(x.b-x.t))}</b></small>`:""}
+   <div class="bar"><i style="width:${x.b/max*100}%;background:var(--accent)"></i></div></div>`}).join("")+
+   `<div class="kv" style="margin-top:6px;font-weight:700"><span style="color:var(--fg)">Total sem descontos</span><span class="num">${brl(tb)}</span></div>
+    <div class="kv"><span>Taxas da maquininha</span><span class="num neg">−${brl(r2(tt))}</span></div>
+    <div class="kv" style="font-weight:700"><span style="color:var(--fg)">Total com descontos</span><span class="num pos">${brl(r2(tb-tt))}</span></div>`}
 function renderKP(){
   const k=state.kp,[a,b,lbl]=kpRange();
   document.querySelectorAll("#kpPer .chip").forEach(c=>c.setAttribute("aria-pressed",c.dataset.kper===k.per));
@@ -704,12 +735,15 @@ function renderKP(){
   const bs=barbers().map(x=>x.n);$("kpBarb").innerHTML=`<option value="">Todos</option>`+bs.map(n=>`<option ${n===k.barb?"selected":""}>${esc(n)}</option>`).join("");
   const h1=k.h1===""?null:+k.h1,h2=k.h2===""?null:+k.h2,useH=h1!==null||h2!==null;
   const list=local.read().entries.filter(e=>isAtend(e)&&e.data>=a&&e.data<=b&&(!k.barb||(e.barbeiro||"Sem barbeiro")===k.barb)&&(!useH||(()=>{const h=hourOf(e);return h!==null&&(h1===null||h>=h1)&&(h2===null||h<=h2)})()));
+  const txk=r2(list.reduce((s,e)=>s+taxaOf(e),0));
   const fat=list.reduce((s,e)=>s+(e.tipo==="in"?e.valor:0),0),com=list.reduce((s,e)=>s+(e.comissao||0),0),pagos=list.filter(e=>e.tipo==="in").length;
   const days=Math.max(1,Math.round((new Date(b+"T12:00")-new Date(a+"T12:00"))/864e5)+1);
   let html=`<div class="kpt"><div><small>Atendimentos</small><span class="num">${list.length}</span></div>
    <div><small>Faturamento</small><span class="num">${brl(fat)}</span></div>
    <div><small>Ticket médio</small><span class="num">${brl(pagos?fat/pagos:0)}</span></div>
-   <div><small>Comissões</small><span class="num">${brl(com)}</span></div></div>`;
+   <div><small>Comissões</small><span class="num">${brl(com)}</span></div>
+   <div><small>Taxas maquininha</small><span class="num">${brl(txk)}</span></div>
+   <div><small>Fatur. com descontos</small><span class="num">${brl(r2(fat-txk))}</span></div></div>`;
   if(!list.length){$("kpBox").innerHTML=html+`<div class="empty" style="padding:8px">Nenhum atendimento ${lbl}${useH?" nesse horário":""}.</div>`;return}
   const g={};list.forEach(e=>{const n=e.barbeiro||"Sem barbeiro";(g[n]=g[n]||{n,q:0,fat:0,com:0,items:[]});g[n].q++;if(e.tipo==="in")g[n].fat+=e.valor;g[n].com+=e.comissao||0;g[n].items.push(e)});
   const arr=Object.values(g).sort((x,y)=>y.q-x.q),max=Math.max(...arr.map(x=>x.q));
@@ -846,6 +880,8 @@ function openDay(day){
    <div class="card" style="margin-bottom:12px"><div class="kv"><span>Atendimentos</span><span class="num">${serv}</span></div>
    <div class="kv"><span>Ticket médio</span><span class="num">${brl(serv?s.i/serv:0)}</span></div>
    <div class="kv"><span>Comissões</span><span class="num">${brl(s.c)}</span></div>
+   <div class="kv"><span>Taxas da maquininha</span><span class="num">${brl(s.tx)}</span></div>
+   <div class="kv"><span>Entrou com descontos da maquininha</span><span class="num">${brl(s.liq)}</span></div>
    <div class="kv"><span>Despesas</span><span class="num">${brl(outReal)}</span></div></div>
    <div class="card"><div class="list">${list.length?list.map(rowHTML).join(""):`<div class="empty">Nenhum lançamento neste dia.</div>`}</div></div>
    <button class="btn primary" data-goday="${iso}" style="width:100%;margin-top:12px">Lançar neste dia</button>`;
@@ -879,6 +915,7 @@ function drawAjustes(){
   $("fidMeta").value=draft.fid.meta;$("fidCom").checked=!!draft.fid.com;
   $("fidFree").innerHTML=draft.services.map(s=>`<option ${s.n===draft.fid.gratis?"selected":""}>${esc(s.n)}</option>`).join("");
   $("fidCount").innerHTML=draft.services.map(s=>`<button class="chip" data-fidc="${esc(s.n)}" aria-pressed="${draft.fid.conta.includes(s.n)}">${esc(s.n)}</button>`).join("");
+  draft.taxas=Object.assign({},DEFAULT_CFG.taxas,draft.taxas||{});$("txDeb").value=draft.taxas["Débito"];$("txCred").value=draft.taxas["Crédito"];
   $("cfgGoal").value=draft.goal||"";$("cfgOff").value=draft.off||"";
   $("cfgSave").disabled=!state.canWrite;
 }
@@ -890,6 +927,7 @@ function readDraft(){
   draft.fid=Object.assign({},draft.fid,{meta:Math.max(2,Math.round(+$("fidMeta").value||10)),gratis:$("fidFree").value||draft.fid.gratis,com:$("fidCom").checked,
     conta:[...document.querySelectorAll("#fidCount .chip")].filter(c=>c.getAttribute("aria-pressed")==="true").map(c=>c.dataset.fidc)});
   draft.lembrete={on:$("remOn").checked,dias:Math.min(120,Math.max(3,Math.round(+$("remDias").value||15))),msg:$("remMsg").value.trim()||DEFAULT_CFG.lembrete.msg,livre:$("remFree").value||DEFAULT_CFG.lembrete.livre};
+  draft.taxas={"Débito":Math.max(0,Math.min(30,+String($("txDeb").value).replace(",",".")||0)),"Crédito":Math.max(0,Math.min(30,+String($("txCred").value).replace(",",".")||0))};
   draft.goal=+$("cfgGoal").value||0;draft.off=$("cfgOff").value;
   oldNames.forEach((o,i)=>{const nn=draft.services[i]&&draft.services[i].n;if(!nn||nn===o)return;
     if(draft.fid.conta.includes(o)&&!draft.fid.conta.includes(nn))draft.fid.conta.push(nn);
@@ -902,6 +940,7 @@ function toast(msg,id){lastId=id;$("toastMsg").textContent=msg;$("toastUndo").hi
 async function addEntry(e){
   if(!state.canWrite)return;
   e.data=state.date;e.mes=state.date.slice(0,7);e.criado=Date.now();
+  if(e.tipo==="in"){const p=+taxas()[e.pagamento]||0;if(p>0){e.taxaPct=p;e.taxa=r2(e.valor*p/100)}}
   if(e.tipo!=="brinde"&&!(e.valor>0)){toast("Informe um valor maior que zero.");return}
   try{
     const id=await store.add(e);
