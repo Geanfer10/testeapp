@@ -306,10 +306,10 @@ nav.tabs button[aria-current=page]{color:var(--accent)}
   <section class="view" id="v-lock" hidden>
     <div class="card lockbox">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
-      <h2>Histórico protegido</h2>
-      <p style="margin:0;color:var(--muted);font-size:13px;max-width:300px">Só o responsável pelo app pode ver. Digite a senha para abrir.</p>
-      <input type="password" id="lockPin" inputmode="numeric" autocomplete="off" maxlength="8" aria-label="Senha do histórico">
-      <button class="btn primary" id="lockGo" style="min-width:160px">Abrir histórico</button>
+      <h2>Resumo do mês protegido</h2>
+      <p style="margin:0;color:var(--muted);font-size:13px;max-width:300px">Lucro, faturamento, projeção e comissões ficam visíveis só para o responsável pelo app. Digite a senha para abrir.</p>
+      <input type="password" id="lockPin" inputmode="numeric" autocomplete="off" maxlength="8" aria-label="Senha do mês">
+      <button class="btn primary" id="lockGo" style="min-width:160px">Abrir resumo do mês</button>
       <p id="lockMsg" style="margin:0;font-size:13px;color:var(--out);min-height:18px"></p>
     </div>
   </section>
@@ -386,7 +386,7 @@ nav.tabs button[aria-current=page]{color:var(--accent)}
       </div>
     </div>
     <div class="card">
-      <h2 style="margin-bottom:4px">Senha do Histórico</h2>
+      <h2 style="margin-bottom:4px">Senha da aba Mês</h2>
       <p id="pinStatus" style="margin:0 0 10px;color:var(--muted);font-size:13px"></p>
       <div class="form">
         <label id="pinCurWrap" class="full">Senha atual<input type="password" id="pinCur" inputmode="numeric" autocomplete="off" maxlength="8"></label>
@@ -535,7 +535,7 @@ function render(){
   const mLabel=new Date(state.month+"-15T12:00").toLocaleDateString("pt-BR",{month:"short",year:"numeric"}).replace(".","");
   $("mLabel").textContent=mLabel;
   document.querySelectorAll("section.view").forEach(s=>s.hidden=s.id!=="v-"+state.view);
-  const navV=state.view==="lock"?"hist":state.view;
+  const navV=state.view==="lock"?"mes":state.view;
   document.querySelectorAll("nav.tabs button").forEach(b=>{if(b.dataset.v===navV)b.setAttribute("aria-current","page");else b.removeAttribute("aria-current")});
   renderLancar();renderMes();renderHist();renderClientes();renderReminders();renderAjustesOnce();renderPin();
   if(state.sheetDay)openDay(state.sheetDay);
@@ -666,7 +666,7 @@ async function hashPin(p){const txt="sholla-caixa:"+p;
   try{if(window.crypto&&crypto.subtle){const b=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(txt));return Array.from(new Uint8Array(b)).map(x=>x.toString(16).padStart(2,"0")).join("")}}catch(e){}
   let h=5381;for(const c of txt)h=((h<<5)+h+c.charCodeAt(0))|0;return "x"+(h>>>0).toString(16)}
 function renderPin(){const on=!!pinHash();
-  $("pinStatus").textContent=on?"O Histórico está protegido por senha. Para trocar ou remover, digite a senha atual.":"Sem senha: qualquer pessoa que usa o app vê o Histórico. Crie uma senha para que só o responsável consiga abrir.";
+  $("pinStatus").textContent=on?"A aba Mês está protegida por senha. Para trocar ou remover, digite a senha atual.":"Sem senha: qualquer pessoa que usa o app vê a aba Mês, com lucro, faturamento e comissões. Crie uma senha para que só o responsável consiga abrir.";
   $("pinCurWrap").hidden=!on;$("pinDel").hidden=!on;$("pinSet").textContent=on?"Trocar senha":"Criar senha"}
 function renderCom(all){
   const bs=barbers(), g={};
@@ -822,8 +822,8 @@ document.addEventListener("click",ev=>{const r=ev.target.closest&&ev.target.clos
   const a=ev.target.closest&&ev.target.closest("a[data-sent]");if(a){const id=a.dataset.sent;setTimeout(()=>{markReminded(id);toast("Lembrete marcado como enviado.");render()},800)}});
 document.addEventListener("click",async ev=>{
   const t=ev.target.closest("button");if(!t)return;
-  if(t.dataset.v){let v=t.dataset.v;if(v==="hist"&&pinHash()&&!state.histOpen){v="lock";$("lockPin").value="";$("lockMsg").textContent=""}
-    if(v!=="hist")state.histOpen=false;state.view=v;render();window.scrollTo(0,0);if(v==="lock")setTimeout(()=>$("lockPin").focus(),50);return}
+  if(t.dataset.v){let v=t.dataset.v;if(v==="mes"&&pinHash()&&!state.histOpen){v="lock";$("lockPin").value="";$("lockMsg").textContent=""}
+    if(v!=="mes")state.histOpen=false;state.view=v;render();window.scrollTo(0,0);if(v==="lock")setTimeout(()=>$("lockPin").focus(),50);return}
   if(t.dataset.pay){state.pay=t.dataset.pay;renderLancar();return}
   if(t.dataset.barb){state.barb=+t.dataset.barb;renderLancar();return}
   if(t.dataset.svc){const s=state.cfg.services[+t.dataset.svc],c=selectedClient(),useFree=$("useFree")&&$("useFree").checked;
@@ -833,7 +833,7 @@ document.addEventListener("click",async ev=>{
       if(s.n!==fs.n&&diff>0){const pe=comEntry({tipo:"in",categoria:"Serviço",descricao:s.n+" (com "+fs.n.toLowerCase()+" grátis)",valor:diff,pagamento:state.pay});pe.cliente=c.id;pe.clienteNome=c.n;pe.semSelo=true;setTimeout(()=>addEntry(pe),50)}
       return}
     const e=comEntry({tipo:"in",categoria:"Serviço",descricao:s.n,valor:+s.v,pagamento:state.pay});if(c){e.cliente=c.id;e.clienteNome=c.n}addEntry(e);return}
-  if(t.dataset.goday){closeSheet();state.date=t.dataset.goday;state.view="lancar";render();window.scrollTo(0,0);return}
+  if(t.dataset.goday){closeSheet();state.histOpen=false;state.date=t.dataset.goday;state.view="lancar";render();window.scrollTo(0,0);return}
   if(t.dataset.fidc){t.setAttribute("aria-pressed",t.getAttribute("aria-pressed")!=="true");return}
   if(t.dataset.pickcli){const c=clients().find(x=>x.id===t.dataset.pickcli);if(c){$("cliPick").value=c.n;$("cliSug").hidden=true;$("cliPick").setAttribute("aria-expanded","false");renderCliPick()}return}
   if(t.id==="cliQuick"){const n=$("cliPick").value.trim();if(n){const l=clients();l.push({id:"c"+Date.now().toString(36),n,tel:($("cliQuickTel")&&$("cliQuickTel").value.trim())||""});saveClients(l);toast("Cliente "+n+" cadastrado.");render()}return}
@@ -885,7 +885,7 @@ $("ncAdd").onclick=()=>{const n=$("ncName").value.trim();if(!n){toast("Digite o 
   const l=clients();if(l.some(c=>c.n.toLowerCase()===n.toLowerCase())){toast("Já existe um cliente com esse nome.");return}
   l.push({id:"c"+Date.now().toString(36),n,tel:$("ncTel").value.trim(),ant:Math.max(0,Math.round(+$("ncAnt").value||0))});saveClients(l);$("ncName").value="";$("ncTel").value="";$("ncAnt").value="";toast("Cliente "+n+" cadastrado.");render()};
 async function tryUnlock(){const p=$("lockPin").value.trim();if(!p)return;
-  if(await hashPin(p)===pinHash()){state.histOpen=true;state.view="hist";$("lockPin").value="";render();window.scrollTo(0,0)}
+  if(await hashPin(p)===pinHash()){state.histOpen=true;state.view="mes";$("lockPin").value="";render();window.scrollTo(0,0)}
   else{$("lockMsg").textContent="Senha incorreta.";$("lockPin").value="";$("lockPin").focus()}}
 $("lockGo").onclick=tryUnlock;$("lockPin").onkeydown=e=>{if(e.key==="Enter")tryUnlock()};
 $("pinSet").onclick=async()=>{const n=$("pinNew").value.trim(),n2=$("pinNew2").value.trim();
@@ -893,9 +893,9 @@ $("pinSet").onclick=async()=>{const n=$("pinNew").value.trim(),n2=$("pinNew2").v
   if(!/^\d{4,8}$/.test(n)){$("pinMsg").textContent="Use de 4 a 8 números.";return}
   if(n!==n2){$("pinMsg").textContent="As duas senhas novas não são iguais.";return}
   const d=local.read();d.pin=await hashPin(n);local.write(d);["pinCur","pinNew","pinNew2"].forEach(i=>$(i).value="");
-  state.histOpen=false;$("pinMsg").textContent="Senha salva. Anote em lugar seguro: sem ela, o Histórico não abre.";renderPin()};
+  state.histOpen=false;$("pinMsg").textContent="Senha salva. Anote em lugar seguro: sem ela, a aba Mês não abre.";renderPin()};
 $("pinDel").onclick=async()=>{if(await hashPin($("pinCur").value.trim())!==pinHash()){$("pinMsg").textContent="Digite a senha atual para remover.";return}
-  const d=local.read();delete d.pin;local.write(d);["pinCur","pinNew","pinNew2"].forEach(i=>$(i).value="");$("pinMsg").textContent="Senha removida. O Histórico está aberto para todos.";renderPin()};
+  const d=local.read();delete d.pin;local.write(d);["pinCur","pinNew","pinNew2"].forEach(i=>$(i).value="");$("pinMsg").textContent="Senha removida. A aba Mês está aberta para todos.";renderPin()};
 $("barbAdd").onclick=()=>{readDraft();draft.barbers.push({n:"",p:40});drawAjustes();$("bn"+(draft.barbers.length-1)).focus()};
 $("svcAdd").onclick=()=>{readDraft();draft.services.push({n:"",v:0});drawAjustes();$("sn"+(draft.services.length-1)).focus()};
 $("fixAdd").onclick=()=>{readDraft();draft.fixed.push({n:"Outros",c:"Outros",v:0});drawAjustes()};
