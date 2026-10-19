@@ -160,6 +160,19 @@ textarea{background:var(--surface);border:1px solid var(--line);border-radius:10
 .lockbox{display:flex;flex-direction:column;align-items:center;text-align:center;gap:12px;padding:28px 16px}
 .lockbox svg{width:44px;height:44px;color:var(--accent)}
 .lockbox input{max-width:220px;text-align:center;font-size:22px;letter-spacing:.3em;font-family:var(--f-num)}
+.kpt{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+.kpt div{background:var(--surface-2);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.kpt small{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;font-weight:700}
+.kpt .num{font-size:18px;font-weight:600;overflow-wrap:anywhere}
+.kpbarb{width:100%;border:0;background:transparent;text-align:left;cursor:pointer;padding:0;font:inherit;color:inherit}
+.kplist{grid-column:1/-1;background:var(--surface-2);border-radius:10px;padding:4px 10px;margin-top:4px}
+.kplist .kv{font-size:13px}.kplist .kv .num{white-space:nowrap}
+.hrs{display:flex;align-items:flex-end;gap:3px;height:104px;margin-top:8px}
+.hrs div{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;gap:3px;min-width:0}
+.hrs i{display:block;width:100%;background:var(--accent);border-radius:3px 3px 0 0;min-height:2px}
+.hrs small{font-size:10px;color:var(--muted);font-family:var(--f-num)}
+.hrs b{font-size:10px;font-family:var(--f-num);font-weight:600}
+.cli .nm{border:0;background:transparent;padding:0;font:inherit;color:inherit;font-weight:700;cursor:pointer;text-align:left;text-decoration:underline;text-decoration-color:var(--line);text-underline-offset:3px}
 .dot.brinde{background:var(--brass)} .row .val.brinde{color:var(--brass)}
 nav.tabs button{border:0;background:transparent;padding:10px 4px 12px;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:12px;font-weight:600;color:var(--muted);cursor:pointer}
 nav.tabs button svg{width:22px;height:22px}
@@ -260,8 +273,19 @@ nav.tabs button[aria-current=page]{color:var(--accent)}
     </div>
 
     <div class="card" id="barbCard">
-      <h3>Atendimentos por barbeiro</h3>
-      <div id="barbBox"></div>
+      <h3>Desempenho dos barbeiros</h3>
+      <div class="chips" id="kpPer" style="margin-bottom:10px">
+        <button class="chip" data-kper="hoje">Hoje</button><button class="chip" data-kper="7d">7 dias</button>
+        <button class="chip" data-kper="mes">Mês</button><button class="chip" data-kper="custom">Escolher datas</button>
+      </div>
+      <div class="form" id="kpCustom" hidden style="margin-bottom:10px">
+        <label>De<input type="date" id="kpDe"></label><label>Até<input type="date" id="kpAte"></label>
+      </div>
+      <div class="form" style="margin-bottom:10px">
+        <label>Horário a partir de<select id="kpH1"></select></label><label>até<select id="kpH2"></select></label>
+        <label class="full">Barbeiro<select id="kpBarb"></select></label>
+      </div>
+      <div id="kpBox"></div>
     </div>
     <div class="card" id="comCard">
       <h3>Comissões dos barbeiros</h3>
@@ -455,7 +479,7 @@ const todayISO=()=>{const d=new Date();return d.getFullYear()+"-"+pad(d.getMonth
 const $=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 
-let state={entries:[],cfg:JSON.parse(JSON.stringify(DEFAULT_CFG)),month:todayISO().slice(0,7),date:todayISO(),type:"in",pay:"Pix",barb:0,view:"lancar",hist:"all",canWrite:true};
+let state={entries:[],cfg:JSON.parse(JSON.stringify(DEFAULT_CFG)),month:todayISO().slice(0,7),date:todayISO(),type:"in",pay:"Pix",barb:0,kp:{per:"mes",de:"",ate:"",h1:"",h2:"",barb:"",open:null},view:"lancar",hist:"all",canWrite:true};
 
 /* ---------- armazenamento: banco do artifact, com reserva local ---------- */
 const LS="caixa-barbearia-v1";
@@ -539,6 +563,7 @@ function render(){
   document.querySelectorAll("nav.tabs button").forEach(b=>{if(b.dataset.v===navV)b.setAttribute("aria-current","page");else b.removeAttribute("aria-current")});
   renderLancar();renderMes();renderHist();renderClientes();renderReminders();renderAjustesOnce();renderPin();
   if(state.sheetDay)openDay(state.sheetDay);
+  if(state.sheetCli)openClient(state.sheetCli);
 }
 
 function renderLancar(){
@@ -613,7 +638,7 @@ function renderMes(){
   const outList=all.filter(e=>e.tipo==="out").concat(all.filter(e=>e.comissao>0).map(e=>({categoria:"Comissões de barbeiros",valor:e.comissao})));
   $("catOut").innerHTML=catHTML(outList,"categoria","var(--out)");
   renderCom(all);
-  renderBarbCount(all);
+  renderKP();
   $("catIn").innerHTML=catHTML(all.filter(e=>e.tipo==="in"),"descricao","var(--in)");
   $("payBox").innerHTML=catHTML(all.filter(e=>e.tipo==="in"),"pagamento","var(--accent)");
 }
@@ -660,6 +685,76 @@ function renderBarbCount(all){
   arr.map(x=>`<div class="bb"><div style="min-width:0"><b style="font-weight:700">${esc(x.n)}</b>${isCur?` <small>· ${x.hoje} hoje</small>`:""}<br>
     <small>${Object.entries(x.svc).sort((a,b)=>b[1]-a[1]).map(([k,v])=>esc(k)+" "+v).join(" · ")||"sem atendimentos"}${x.fat?" · "+brl(x.fat):""}</small></div>
     <span class="big">${x.mes}</span><div class="bar"><i style="width:${x.mes/max*100}%"></i></div></div>`).join("");
+}
+function hourOf(e){return e.criado?new Date(e.criado).getHours():null}
+function addDays(iso,n){const d=new Date(iso+"T12:00");d.setDate(d.getDate()+n);return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate())}
+function isAtend(e){return (e.tipo==="in"&&e.categoria==="Serviço"&&!e.semSelo)||e.tipo==="brinde"}
+function kpRange(){const k=state.kp,t=todayISO();
+  if(k.per==="hoje")return[t,t,"hoje"];
+  if(k.per==="7d")return[addDays(t,-6),t,"nos últimos 7 dias"];
+  if(k.per==="custom"){let a=k.de||t,b=k.ate||a;if(b<a)[a,b]=[b,a];return[a,b,"de "+a.split("-").reverse().join("/")+" a "+b.split("-").reverse().join("/")]}
+  const [y,m]=state.month.split("-").map(Number);return[state.month+"-01",state.month+"-"+pad(new Date(y,m,0).getDate()),"no mês"]}
+function renderKP(){
+  const k=state.kp,[a,b,lbl]=kpRange();
+  document.querySelectorAll("#kpPer .chip").forEach(c=>c.setAttribute("aria-pressed",c.dataset.kper===k.per));
+  $("kpCustom").hidden=k.per!=="custom";if(k.per==="custom"){$("kpDe").value=a;$("kpAte").value=b}
+  const hopt=v=>`<option value="">${v}</option>`+Array.from({length:18},(_,i)=>i+6).map(h=>`<option value="${h}">${pad(h)}h</option>`).join("");
+  if(!$("kpH1").options.length){$("kpH1").innerHTML=hopt("Qualquer hora");$("kpH2").innerHTML=hopt("Qualquer hora")}
+  $("kpH1").value=k.h1;$("kpH2").value=k.h2;
+  const bs=barbers().map(x=>x.n);$("kpBarb").innerHTML=`<option value="">Todos</option>`+bs.map(n=>`<option ${n===k.barb?"selected":""}>${esc(n)}</option>`).join("");
+  const h1=k.h1===""?null:+k.h1,h2=k.h2===""?null:+k.h2,useH=h1!==null||h2!==null;
+  const list=local.read().entries.filter(e=>isAtend(e)&&e.data>=a&&e.data<=b&&(!k.barb||(e.barbeiro||"Sem barbeiro")===k.barb)&&(!useH||(()=>{const h=hourOf(e);return h!==null&&(h1===null||h>=h1)&&(h2===null||h<=h2)})()));
+  const fat=list.reduce((s,e)=>s+(e.tipo==="in"?e.valor:0),0),com=list.reduce((s,e)=>s+(e.comissao||0),0),pagos=list.filter(e=>e.tipo==="in").length;
+  const days=Math.max(1,Math.round((new Date(b+"T12:00")-new Date(a+"T12:00"))/864e5)+1);
+  let html=`<div class="kpt"><div><small>Atendimentos</small><span class="num">${list.length}</span></div>
+   <div><small>Faturamento</small><span class="num">${brl(fat)}</span></div>
+   <div><small>Ticket médio</small><span class="num">${brl(pagos?fat/pagos:0)}</span></div>
+   <div><small>Comissões</small><span class="num">${brl(com)}</span></div></div>`;
+  if(!list.length){$("kpBox").innerHTML=html+`<div class="empty" style="padding:8px">Nenhum atendimento ${lbl}${useH?" nesse horário":""}.</div>`;return}
+  const g={};list.forEach(e=>{const n=e.barbeiro||"Sem barbeiro";(g[n]=g[n]||{n,q:0,fat:0,com:0,items:[]});g[n].q++;if(e.tipo==="in")g[n].fat+=e.valor;g[n].com+=e.comissao||0;g[n].items.push(e)});
+  const arr=Object.values(g).sort((x,y)=>y.q-x.q),max=Math.max(...arr.map(x=>x.q));
+  html+=`<h3 style="margin-top:4px">Por barbeiro <span style="text-transform:none;letter-spacing:0;font-weight:500">· toque para ver os atendimentos</span></h3>`+arr.map(x=>{const op=k.open===x.n;
+    return`<div class="bb"><button class="kpbarb" data-kbarb="${esc(x.n)}" aria-expanded="${op}"><b style="font-weight:700">${op?"▾":"▸"} ${esc(x.n)}</b><br>
+    <small>${(x.q/list.length*100).toFixed(0)}% dos atendimentos · ${brl(x.fat)} · ticket ${brl(x.fat/Math.max(1,x.items.filter(e=>e.tipo==="in").length))}${x.com?" · comissão "+brl(x.com):""} · ${(x.q/days).toFixed(1)}/dia</small></button>
+    <span class="big">${x.q}</span><div class="bar"><i style="width:${x.q/max*100}%"></i></div>
+    ${op?`<div class="kplist">${x.items.slice().sort((p,q)=>(q.data+(q.criado||0))>(p.data+(p.criado||0))?1:-1).map(e=>{const h=hourOf(e);
+      return`<div class="kv"><span style="color:var(--fg)">${e.data.split("-").reverse().slice(0,2).join("/")}${h!==null?" "+pad(h)+"h"+pad(new Date(e.criado).getMinutes()):""} · ${esc(e.tipo==="brinde"?e.descricao:e.descricao)}${e.clienteNome?` <small style="color:var(--muted)">· ${esc(e.clienteNome)}</small>`:""}</span><span class="num">${e.tipo==="brinde"?"grátis":brl(e.valor)}</span></div>`}).join("")}</div>`:""}</div>`}).join("");
+  const hc={};list.forEach(e=>{const h=hourOf(e);if(h!==null)hc[h]=(hc[h]||0)+1});
+  const hs=Object.keys(hc).map(Number);
+  if(hs.length){const lo=Math.min(...hs),hi=Math.max(...hs),hm=Math.max(...Object.values(hc));let bars="";
+    for(let h=lo;h<=hi;h++){const q=hc[h]||0;bars+=`<div title="${pad(h)}h: ${q}"><b>${q||""}</b><i style="height:${q/hm*60}px"></i><small>${pad(h)}</small></div>`}
+    const pico=Object.entries(hc).sort((x,y)=>y[1]-x[1])[0];
+    html+=`<h3 style="margin-top:14px">Atendimentos por horário</h3><p style="margin:0;color:var(--muted);font-size:12px">Horário de pico: ${pad(+pico[0])}h (${pico[1]} atendimento${pico[1]>1?"s":""}). A hora é a do momento em que o lançamento foi feito no app.</p><div class="hrs">${bars}</div>`}
+  $("kpBox").innerHTML=html;
+}
+function openClient(id){
+  const c=clients().find(x=>x.id===id);if(!c){closeSheet();return}
+  const f=fid(),si=stampInfo(id),items=local.read().entries.filter(e=>e.cliente===id).sort((p,q)=>(q.data+(q.criado||0))>(p.data+(p.criado||0))?1:-1);
+  const vis=items.filter(isAtend),gasto=items.filter(e=>e.tipo==="in").reduce((a,e)=>a+e.valor,0),pagos=items.filter(e=>e.tipo==="in"&&e.categoria==="Serviço"&&!e.semSelo).length;
+  const datas=[...new Set(vis.map(e=>e.data))].sort();let freq=null;if(datas.length>1)freq=Math.round(daysBetween(datas[0],datas[datas.length-1])/(datas.length-1));
+  const svcCount={};vis.forEach(e=>{const n=e.tipo==="brinde"?"Grátis (fidelidade)":e.descricao;svcCount[n]=(svcCount[n]||0)+1});
+  const fav=Object.entries(svcCount).sort((a,b)=>b[1]-a[1])[0];
+  const barbCount={};vis.forEach(e=>{if(e.barbeiro)barbCount[e.barbeiro]=(barbCount[e.barbeiro]||0)+1});const favB=Object.entries(barbCount).sort((a,b)=>b[1]-a[1])[0];
+  const lc=datas.length?datas[datas.length-1]:null;
+  $("shTitle").textContent=c.n;
+  $("shBody").innerHTML=`<div class="kpt"><div><small>Visitas</small><span class="num">${vis.length}${si.prev?` <small style="text-transform:none;letter-spacing:0">+${si.prev} antes</small>`:""}</span></div>
+    <div><small>Total gasto</small><span class="num">${brl(gasto)}</span></div>
+    <div><small>Ticket médio</small><span class="num">${brl(pagos?gasto/pagos:0)}</span></div>
+    <div><small>Volta a cada</small><span class="num">${freq?freq+(freq===1?" dia":" dias"):"—"}</span></div></div>
+    <div class="card" style="margin-bottom:12px">
+     <div class="kv"><span>Cartão fidelidade</span><span class="num">${Math.min(si.cur,f.meta)}/${f.meta}${si.ready?" · grátis disponível":""}</span></div>
+     <div class="kv"><span>Último corte</span><span class="num">${lc?lc.split("-").reverse().join("/")+" · há "+daysBetween(lc,todayISO())+" dias":"—"}</span></div>
+     <div class="kv"><span>Primeira visita no app</span><span class="num">${datas.length?datas[0].split("-").reverse().join("/"):"—"}</span></div>
+     <div class="kv"><span>Serviço preferido</span><span>${fav?esc(fav[0])+" ("+fav[1]+"×)":"—"}</span></div>
+     <div class="kv"><span>Atendido mais por</span><span>${favB?esc(favB[0])+" ("+favB[1]+"×)":"—"}</span></div>
+     <div class="kv"><span>WhatsApp</span><span>${c.tel?esc(c.tel):"não cadastrado"}</span></div>
+    </div>
+    ${waNumber(c.tel)?`<a class="wa" style="width:100%;justify-content:center;margin-bottom:12px" href="https://wa.me/${waNumber(c.tel)}?text=${encodeURIComponent(waFree(c))}" target="_blank" rel="noopener">${WA_ICON}Mandar WhatsApp</a>`:""}
+    <h3>Histórico de visitas</h3>
+    <div class="card"><div class="list">${items.length?items.map(e=>{const h=hourOf(e);
+      return`<div class="row"><i class="dot ${e.tipo}"></i><div class="desc"><b>${esc(e.descricao||e.categoria)}</b><small>${new Date(e.data+"T12:00").toLocaleDateString("pt-BR",{weekday:"short",day:"2-digit",month:"2-digit",year:"numeric"})}${h!==null?" · "+pad(h)+"h"+pad(new Date(e.criado).getMinutes()):""}${e.barbeiro?" · "+esc(e.barbeiro):""}${e.pagamento?" · "+esc(e.pagamento):""}</small></div>
+      <span class="num val ${e.tipo}">${e.tipo==="brinde"?"grátis":(e.tipo==="in"?"+":"−")+brl(e.valor).replace("R$ ","")}</span><span></span></div>`}).join(""):`<div class="empty">Nenhuma visita lançada com o nome deste cliente ainda.</div>`}</div></div>`;
+  $("sheetBg").hidden=false;state.sheetCli=id;
 }
 function pinHash(){return local.read().pin||""}
 async function hashPin(p){const txt="sholla-caixa:"+p;
@@ -737,7 +832,7 @@ function renderClientes(){
   const list=clients().filter(c=>!q||c.n.toLowerCase().includes(q)||(c.tel||"").includes(q)).map(c=>Object.assign({si:stampInfo(c.id)},c))
     .sort((a,b)=>(b.si.ready-a.si.ready)||(b.si.cur-a.si.cur)||a.n.localeCompare(b.n));
   if(!clients().length){$("cliListView").innerHTML=`<div class="empty">Nenhum cliente cadastrado.<br>Cadastre acima ou direto na tela de lançar, digitando o nome do cliente.</div>`;return}
-  $("cliListView").innerHTML=list.length?list.map(c=>`<div class="cli"><div style="min-width:0"><b>${esc(c.n)}</b> ${c.si.ready?`<small style="color:var(--brass);font-weight:700">· grátis disponível</small>`:""}<br><small>${c.tel?esc(c.tel)+" · ":`<span style="color:var(--warn)">sem telefone</span> · `}${c.si.atend} atendimento${c.si.atend===1?"":"s"} · ${c.si.paid+c.si.prev} selo${c.si.paid+c.si.prev===1?"":"s"}${c.si.prev?" + "+c.si.prev+" antes do app":""} · ${c.si.used} grátis usados${c.si.last?" · última visita "+c.si.last.split("-").reverse().join("/"):""}</small></div>
+  $("cliListView").innerHTML=list.length?list.map(c=>`<div class="cli"><div style="min-width:0"><button class="nm" data-opencli="${c.id}">${esc(c.n)}</button> ${c.si.ready?`<small style="color:var(--brass);font-weight:700">· grátis disponível</small>`:""}<br><small>${c.tel?esc(c.tel)+" · ":`<span style="color:var(--warn)">sem telefone</span> · `}${c.si.atend} atendimento${c.si.atend===1?"":"s"} · ${c.si.paid+c.si.prev} selo${c.si.paid+c.si.prev===1?"":"s"}${c.si.prev?" + "+c.si.prev+" antes do app":""} · ${c.si.used} grátis usados${c.si.last?" · última visita "+c.si.last.split("-").reverse().join("/"):""}</small></div>
     <div style="display:flex;gap:2px"><button class="x" data-edcli="${c.id}" aria-label="Editar cliente" style="font-size:15px">✎</button><button class="x" data-rmcli="${c.id}" aria-label="Excluir cliente">×</button></div>
     <div style="grid-column:1/-1;display:flex;align-items:center;gap:10px">${stampsHTML(Math.min(c.si.cur,f.meta),f.meta)}<small>${Math.min(c.si.cur,f.meta)}/${f.meta}</small></div></div>`).join("")
     :`<div class="empty">Nenhum cliente encontrado.</div>`;
@@ -754,9 +849,9 @@ function openDay(day){
    <div class="kv"><span>Despesas</span><span class="num">${brl(outReal)}</span></div></div>
    <div class="card"><div class="list">${list.length?list.map(rowHTML).join(""):`<div class="empty">Nenhum lançamento neste dia.</div>`}</div></div>
    <button class="btn primary" data-goday="${iso}" style="width:100%;margin-top:12px">Lançar neste dia</button>`;
-  $("sheetBg").hidden=false;state.sheetDay=day;
+  $("sheetBg").hidden=false;state.sheetDay=day;state.sheetCli=null;
 }
-function closeSheet(){$("sheetBg").hidden=true;state.sheetDay=null}
+function closeSheet(){$("sheetBg").hidden=true;state.sheetDay=null;state.sheetCli=null}
 function renderHist(){
   let list=state.entries.slice();if(state.hist!=="all")list=list.filter(e=>e.tipo===state.hist||(state.hist==="out"&&e.tipo==="rep"));
   document.querySelectorAll("#histFilter .chip").forEach(c=>c.setAttribute("aria-pressed",c.dataset.f===state.hist));
@@ -849,6 +944,9 @@ document.addEventListener("click",async ev=>{
     saveClients(clients().map(c=>c.id===id?Object.assign({},c,{n,tel:$("ed_t").value.trim(),ant:Math.max(0,Math.round(+$("ed_a").value||0))}):c));
     if(old&&old.n!==n){const d=local.read();d.entries.forEach(e=>{if(e.cliente===id)e.clienteNome=n});local.write(d);loadLocal()}
     toast("Cliente atualizado.");render();return}
+  if(t.dataset.kper){state.kp.per=t.dataset.kper;state.kp.open=null;renderKP();return}
+  if(t.dataset.kbarb!==undefined){state.kp.open=state.kp.open===t.dataset.kbarb?null:t.dataset.kbarb;renderKP();return}
+  if(t.dataset.opencli){openClient(t.dataset.opencli);return}
   if(t.dataset.addtel){state.view="clientes";$("cliSearch").value="";render();const b=document.querySelector(`[data-edcli="${t.dataset.addtel}"]`);if(b){b.click();b.scrollIntoView({block:"center"})}return}
   if(t.dataset.skip){markReminded(t.dataset.skip);toast("Lembrete pulado. Volta a aparecer em "+lem().dias+" dias se ele não vier.");render();return}
   if(t.dataset.okcli){saveClients(clients().filter(c=>c.id!==t.dataset.okcli));render();return}
@@ -873,7 +971,10 @@ $("outAdd").onclick=()=>{addEntry({tipo:"out",categoria:$("outCat").value,descri
 function shiftMonth(k){const [y,m]=state.month.split("-").map(Number);const d=new Date(y,m-1+k,1);state.month=d.getFullYear()+"-"+pad(d.getMonth()+1);
   const t=todayISO();state.date=t.slice(0,7)===state.month?t:state.month+"-01";subscribeMonth();render()}
 $("mPrev").onclick=()=>shiftMonth(-1);$("mNext").onclick=()=>shiftMonth(1);
-$("shClose").onclick=closeSheet;$("sheetBg").onclick=e=>{if(e.target.id==="sheetBg")closeSheet()};
+$("shClose").onclick=closeSheet;
+["kpDe","kpAte"].forEach(id=>$(id).onchange=()=>{state.kp.de=$("kpDe").value;state.kp.ate=$("kpAte").value;renderKP()});
+$("kpH1").onchange=()=>{state.kp.h1=$("kpH1").value;renderKP()};$("kpH2").onchange=()=>{state.kp.h2=$("kpH2").value;renderKP()};
+$("kpBarb").onchange=()=>{state.kp.barb=$("kpBarb").value;state.kp.open=null;renderKP()};$("sheetBg").onclick=e=>{if(e.target.id==="sheetBg")closeSheet()};
 document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!$("sheetBg").hidden)closeSheet()});
 $("cliPick").oninput=()=>{renderCliPick();showSug()};
 $("cliPick").onfocus=showSug;
