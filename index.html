@@ -249,6 +249,20 @@ nav.tabs button{padding:11px 4px 11px}
 nav.tabs button[aria-current=page]{color:var(--accent);font-weight:800}
 .badge{color:#141311}
 .wa{border-radius:12px}
+.lcard{border-radius:24px;padding:18px;background:var(--accent);color:var(--accent-fg);display:flex;flex-direction:column;gap:14px;margin-bottom:12px}
+.lc-top{display:flex;justify-content:space-between;align-items:flex-start}
+.lc-top small{display:block;font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase}
+.lc-top b{font-family:var(--f-display);font-weight:800;font-size:34px;line-height:1}
+.lc-brand{font-family:var(--f-display);font-weight:800;font-size:16px;letter-spacing:.1em;border:1.5px solid var(--accent-fg);border-radius:999px;padding:4px 12px}
+.lc-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}
+.lc-grid span{aspect-ratio:1;border-radius:50%;display:flex;align-items:center;justify-content:center;max-width:100%}
+.lc-on{background:var(--accent-fg);color:var(--accent)}
+.lc-off{border:2px dashed rgba(20,19,17,.45);font-size:9px;font-weight:800}
+.lc-msg{font-size:13px;font-weight:700}
+.rings{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.ring{background:var(--surface-2);border-radius:18px;padding:14px;display:flex;flex-direction:column;gap:8px;align-items:flex-start;min-width:0}
+.ring b{display:block;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ring small{display:block;font-size:12px;color:var(--muted)}.ring small.warn{color:var(--warn)}
 @media (prefers-reduced-motion: reduce){*{transition:none!important}}
 </style>
 </head><body>
@@ -360,6 +374,7 @@ nav.tabs button[aria-current=page]{color:var(--accent);font-weight:800}
   <section class="view" id="v-mes" hidden>
     <div class="hero">
       <div><small>Lucro do mês até agora</small><div class="big" id="mProfit"></div></div>
+      <div id="heroChart"></div>
       <div class="sub">
         <div>Faturamento<span class="num" id="mIn"></span></div>
         <div>Despesas<span class="num" id="mOut"></span></div>
@@ -888,10 +903,21 @@ function rowHTML(e){
   ${canDel(e)?`<button class="x" data-del="${e.id}" aria-label="Apagar lançamento">×</button>`:"<span></span>"}</div>`;
 }
 
+function heroChartSVG(all,mi){
+  const n=Math.max(1,mi.elapsed||mi.days),acc=[];let run=0;const byD=new Array(mi.days+1).fill(0);
+  all.forEach(e=>{const d=+e.data.slice(8);if(e.tipo==="in")byD[d]+=e.valor;else if(e.tipo==="out")byD[d]-=e.valor;if(e.tipo==="in"||e.tipo==="brinde")byD[d]-=e.comissao||0});
+  for(let d=1;d<=n;d++){run+=byD[d]||0;acc.push(run)}
+  if(acc.length<2||acc.every(v=>v===0))return"";
+  const W=320,H=70,P=6,mn=Math.min(0,...acc),mx=Math.max(...acc,1),sx=i=>P+i*(W-2*P)/(acc.length-1),sy=v=>H-P-(v-mn)/(mx-mn||1)*(H-2*P);
+  const pts=acc.map((v,i)=>sx(i).toFixed(1)+" "+sy(v).toFixed(1));
+  const last=acc.length-1;
+  return`<svg viewBox="0 0 ${W} ${H}" width="100%" height="70" role="img" aria-label="Lucro acumulado no mês"><path d="M${pts.join(" L")} L${sx(last).toFixed(1)} ${H} L${sx(0).toFixed(1)} ${H} Z" fill="var(--accent)" fill-opacity="0.12"/><path d="M${pts.join(" L")}" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/><circle cx="${sx(last).toFixed(1)}" cy="${sy(acc[last]).toFixed(1)}" r="4.5" fill="var(--accent)"/></svg>
+  <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted)"><span>dia 1</span><span>${mi.elapsed&&mi.elapsed<mi.days?"hoje · dia "+mi.elapsed:"dia "+mi.days}</span></div>`}
 function renderMes(){
   const all=state.entries, s=sums(all), mi=monthInfo(), cfg=state.cfg;
   $("mProfit").textContent=brl(s.b);
   $("mIn").textContent=brl(s.i);$("mOut").textContent=brl(s.o);
+  $("heroChart").innerHTML=heroChartSVG(all,mi);
   // projeção
   const fixedTotal=cfg.fixed.reduce((a,f)=>a+(+f.v||0),0);
   const outByCat={};all.filter(e=>e.tipo==="out").forEach(e=>outByCat[e.categoria]=(outByCat[e.categoria]||0)+e.valor);
@@ -1021,6 +1047,11 @@ function renderKP(){
     html+=`<h3 style="margin-top:14px">Atendimentos por horário</h3><p style="margin:0;color:var(--muted);font-size:12px">Horário de pico: ${pad(+pico[0])}h (${pico[1]} atendimento${pico[1]>1?"s":""}). A hora é a do momento em que o lançamento foi feito no app.</p><div class="hrs">${bars}</div>`}
   $("kpBox").innerHTML=html;
 }
+const SCISSOR='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="6" cy="18" r="3"/><circle cx="18" cy="18" r="3"/><path d="M8.2 16 18 4M15.8 16 6 4"/></svg>';
+function loyaltyCard(si,f){const cur=Math.min(si.cur,f.meta);let st="";
+  for(let i=0;i<f.meta;i++)st+=i<cur?`<span class="lc-on">${SCISSOR}</span>`:`<span class="lc-off">${i===f.meta-1?"GRÁTIS":""}</span>`;
+  return`<div class="lcard"><div class="lc-top"><div><small>Cartão fidelidade</small><b>${cur} / ${f.meta}</b></div><span class="lc-brand">SHOLLA</span></div>
+   <div class="lc-grid">${st}</div><span class="lc-msg">${si.ready?"Corte grátis disponível!":"Faltam "+(f.meta-cur)+" para o corte grátis"}</span></div>`}
 function openClient(id,force){
   const c=clients().find(x=>x.id===id);if(!c){closeSheet();return}
   const H=MEM.hist[id];
@@ -1041,8 +1072,8 @@ function openClient(id,force){
     <div><small>Total gasto</small><span class="num">${brl(gasto)}</span></div>
     <div><small>Ticket médio</small><span class="num">${brl(pagos?gasto/pagos:0)}</span></div>
     <div><small>Volta a cada</small><span class="num">${freq?freq+(freq===1?" dia":" dias"):"—"}</span></div></div>
+    ${loyaltyCard(si,f)}
     <div class="card" style="margin-bottom:12px">
-     <div class="kv"><span>Cartão fidelidade</span><span class="num">${Math.min(si.cur,f.meta)}/${f.meta}${si.ready?" · grátis disponível":""}</span></div>
      <div class="kv"><span>Último corte</span><span class="num">${lc?lc.split("-").reverse().join("/")+" · há "+daysBetween(lc,todayISO())+" dias":"—"}</span></div>
      <div class="kv"><span>Primeira visita no app</span><span class="num">${datas.length?datas[0].split("-").reverse().join("/"):"—"}</span></div>
      <div class="kv"><span>Serviço preferido</span><span>${fav?esc(fav[0])+" ("+fav[1]+"×)":"—"}</span></div>
@@ -1118,11 +1149,10 @@ function renderReminders(){
   const t=todayISO(),all=clients().map(c=>({c,si:stampInfo(c.id),lc:lastCut(c.id)})).filter(x=>x.lc).map(x=>Object.assign(x,{since:daysBetween(x.lc,t)}));
   const next=all.filter(x=>x.since<L.dias).sort((a,b)=>(b.since-a.since)||a.c.n.localeCompare(b.c.n));
   $("nextCount").textContent=next.length?next.length+" cliente"+(next.length>1?"s":""):"";
-  $("nextList").innerHTML=next.length?next.map(x=>{const f=L.dias-x.since,pct=Math.max(4,Math.min(100,x.since/L.dias*100));
-    return`<div class="cd ${f<=3?"soon":""}"><div style="min-width:0"><b style="font-weight:600">${esc(x.c.n)}</b><br><small>último corte ${x.lc.split("-").reverse().slice(0,2).join("/")} · há ${x.since} dia${x.since===1?"":"s"}</small></div>
-    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px"><span class="num left">${f===1?"falta 1 dia":"faltam "+f+" dias"}</span>
-    ${waNumber(x.c.tel)?`<a class="wa sm" href="https://wa.me/${waNumber(x.c.tel)}?text=${encodeURIComponent(waFree(x.c))}" target="_blank" rel="noopener">${WA_ICON}WhatsApp</a>`:`<button class="btn ghost" data-addtel="${x.c.id}" style="min-height:30px;padding:4px 10px;font-size:12px">Pôr WhatsApp</button>`}</div>
-    <div class="bar"><i style="width:${pct}%"></i></div></div>`}).join("")
+  $("nextList").innerHTML=next.length?`<div class="rings">`+next.map(x=>{const f=L.dias-x.since,pct=Math.max(0.03,Math.min(1,x.since/L.dias)),C=163.4;
+    return`<div class="ring ${f<=3?"soon":""}"><svg width="64" height="64" viewBox="0 0 64 64" role="img" aria-label="faltam ${f} dias"><circle cx="32" cy="32" r="26" fill="none" stroke="var(--line)" stroke-width="7"/><circle cx="32" cy="32" r="26" fill="none" stroke="${f<=3?"var(--accent)":"#8E7A52"}" stroke-width="7" stroke-linecap="round" stroke-dasharray="${(pct*C).toFixed(1)} ${C}" transform="rotate(-90 32 32)"/><text x="32" y="37" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="15" font-weight="600" fill="var(--fg)">${f}d</text></svg>
+    <div style="min-width:0"><b>${esc(x.c.n)}</b><small class="${f<=3?"warn":""}">${f===1?"falta 1 dia":"faltam "+f+" dias"} · corte ${x.lc.split("-").reverse().slice(0,2).join("/")}</small></div>
+    ${waNumber(x.c.tel)?`<a class="wa sm" href="https://wa.me/${waNumber(x.c.tel)}?text=${encodeURIComponent(waFree(x.c))}" target="_blank" rel="noopener">${WA_ICON}WhatsApp</a>`:`<button class="btn ghost" data-addtel="${x.c.id}" style="min-height:32px;padding:4px 10px;font-size:12px">Pôr WhatsApp</button>`}</div>`}).join("")+`</div>`
     :`<div class="empty" style="padding:8px">Nenhum cliente em contagem. Lance os cortes escolhendo o nome do cliente para ele aparecer aqui.</div>`;
   const noTel=all.filter(x=>x.since>=L.dias&&!waNumber(x.c.tel)).sort((a,b)=>b.since-a.since);
   $("noTelCard").hidden=!noTel.length;
