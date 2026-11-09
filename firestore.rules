@@ -1,0 +1,42 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signed() { return request.auth != null; }
+    function ownerDoc() { return /databases/$(database)/documents/meta/owner; }
+    function isOwner() { return signed() && exists(ownerDoc()) && get(ownerDoc()).data.uid == request.auth.uid; }
+    function userDoc() { return /databases/$(database)/documents/users/$(request.auth.uid); }
+    function isBarber() { return signed() && exists(userDoc()) && get(userDoc()).data.role == 'barber' && get(userDoc()).data.ativo == true; }
+    function myBid() { return get(userDoc()).data.bid; }
+    function staff() { return isOwner() || isBarber(); }
+
+    // Responsável: criado uma única vez, no primeiro acesso
+    match /meta/owner {
+      allow read: if true;
+      allow create: if signed() && !exists(ownerDoc()) && request.resource.data.uid == request.auth.uid;
+      allow update, delete: if false;
+    }
+    // Lista de barbeiros na tela de entrada (só nome e e-mail interno)
+    match /login/{bid} {
+      allow read: if true;
+      allow write: if isOwner();
+    }
+    match /users/{uid} {
+      allow read: if isOwner() || (signed() && request.auth.uid == uid);
+      allow write: if isOwner();
+    }
+    match /config/{doc} {
+      allow read: if staff();
+      allow write: if isOwner();
+    }
+    match /clientes/{id} {
+      allow read, create, update: if staff();
+      allow delete: if isOwner();
+    }
+    match /lancamentos/{id} {
+      allow read: if isOwner() || (isBarber() && resource.data.bid == myBid());
+      allow create: if isOwner() || (isBarber() && request.resource.data.bid == myBid() && request.resource.data.tipo in ['in', 'brinde']);
+      allow update: if isOwner();
+      allow delete: if isOwner() || (isBarber() && resource.data.bid == myBid() && request.time < resource.data.criadoTs + duration.value(24, 'h'));
+    }
+  }
+}
