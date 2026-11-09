@@ -3,7 +3,9 @@ service cloud.firestore {
   match /databases/{database}/documents {
     function signed() { return request.auth != null; }
     function ownerDoc() { return /databases/$(database)/documents/meta/owner; }
-    function isOwner() { return signed() && exists(ownerDoc()) && get(ownerDoc()).data.uid == request.auth.uid; }
+    function isMain() { return signed() && exists(ownerDoc()) && get(ownerDoc()).data.uid == request.auth.uid; }
+    function isAdmin() { return signed() && exists(/databases/$(database)/documents/admins/$(request.auth.uid)); }
+    function isOwner() { return isMain() || isAdmin(); }
     function userDoc() { return /databases/$(database)/documents/users/$(request.auth.uid); }
     function isBarber() { return signed() && exists(userDoc()) && get(userDoc()).data.role == 'barber' && get(userDoc()).data.ativo == true; }
     function myBid() { return get(userDoc()).data.bid; }
@@ -14,6 +16,17 @@ service cloud.firestore {
       allow read: if true;
       allow create: if signed() && !exists(ownerDoc()) && request.resource.data.uid == request.auth.uid;
       allow update, delete: if false;
+    }
+    // Outros responsáveis: entram por convite do e-mail
+    match /convites/{em} {
+      allow read, create, update: if isOwner();
+      allow delete: if isOwner() || (signed() && request.auth.token.email == em);
+    }
+    match /admins/{uid} {
+      allow read: if isOwner() || (signed() && request.auth.uid == uid);
+      allow create: if isOwner() || (signed() && request.auth.uid == uid
+        && exists(/databases/$(database)/documents/convites/$(request.auth.token.email)));
+      allow update, delete: if isOwner();
     }
     // Lista de barbeiros na tela de entrada (só nome e e-mail interno)
     match /login/{bid} {

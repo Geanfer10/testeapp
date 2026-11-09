@@ -233,6 +233,7 @@ nav.tabs button[aria-current=page]{color:var(--accent)}
       <label id="aPass2Wrap" hidden style="display:flex;flex-direction:column;gap:6px;font-size:12px;color:var(--muted);font-weight:600">Repita a senha<input type="password" id="aPass2" autocomplete="new-password"></label>
       <button class="btn primary" id="aOwnerGo">Entrar</button>
       <p class="err" id="aOwnerErr"></p>
+      <button class="linkbtn" id="aInvite">Recebi um convite de responsável: criar minha senha</button>
       <button class="linkbtn" id="aOwnerBack">← Voltar para os barbeiros</button>
     </div>
   </div>
@@ -486,6 +487,13 @@ nav.tabs button[aria-current=page]{color:var(--accent)}
     <button class="btn primary" id="cfgSave">Salvar ajustes</button>
     <p id="cfgMsg" style="margin:0;color:var(--muted);font-size:13px"></p>
     <div class="card">
+      <h2 style="margin-bottom:4px">Responsáveis</h2>
+      <p style="margin:0 0 10px;color:var(--muted);font-size:13px">Quem entra com e-mail e senha e vê tudo: lucro, ajustes e os números de todos. Para dar acesso a outra pessoa, cadastre o e-mail dela. Ela abre o app, toca em "Sou o responsável" → "Recebi um convite" e cria a própria senha.</p>
+      <div class="list" id="admList" style="margin-bottom:10px"></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap"><input type="email" id="admEmail" placeholder="e-mail da pessoa" style="flex:1;min-width:180px"><button class="btn ghost" id="admAdd">Convidar</button></div>
+      <p id="admMsg" style="margin:8px 0 0;font-size:13px;color:var(--muted)"></p>
+    </div>
+    <div class="card">
       <h2 style="margin-bottom:4px">Conta e nuvem</h2>
       <p id="accInfo" style="margin:0 0 10px;color:var(--muted);font-size:13px"></p>
       <div id="impBox" hidden style="background:var(--surface-2);border-radius:10px;padding:12px;margin-bottom:10px">
@@ -652,24 +660,32 @@ async function showPick(){aShow("aLoading");
   if(!ownerExists){showOwner();return}
   $("aBarbs").innerHTML=loginList.map(b=>`<button data-lbarb="${b.id}"><i>${esc(b.n.trim().charAt(0).toUpperCase())}</i>${esc(b.n)}</button>`).join("");
   $("aNoBarbs").hidden=!!loginList.length;aShow("aPick")}
-function showOwner(){$("aOwnerErr").textContent="";
-  $("aOwnerTitle").textContent=ownerExists?"Entrar como responsável":"Criar a conta do responsável";
-  $("aOwnerHelp").textContent=ownerExists?"Use o e-mail e a senha da conta do responsável pelo app.":"Primeiro acesso: crie o e-mail e a senha de quem vai administrar o app (ver lucro, ajustes e cadastrar os barbeiros). Faça isso uma única vez.";
-  $("aPass2Wrap").hidden=ownerExists;$("aOwnerGo").textContent=ownerExists?"Entrar":"Criar conta e entrar";$("aOwnerBack").hidden=!ownerExists;aShow("aOwner")}
-async function ownerGo(){const em=$("aEmail").value.trim(),pw=$("aPass").value;$("aOwnerErr").textContent="";
+let ownerMode="login";
+function showOwner(mode){$("aOwnerErr").textContent="";ownerMode=!ownerExists?"create":(mode==="invite"?"invite":"login");
+  const T={login:["Entrar como responsável","Use o seu e-mail e a sua senha de responsável pelo app.","Entrar"],
+    create:["Criar a conta do responsável","Primeiro acesso: crie o e-mail e a senha de quem vai administrar o app (ver lucro, ajustes e cadastrar os barbeiros). Faça isso uma única vez.","Criar conta e entrar"],
+    invite:["Criar minha senha de responsável","Use o mesmo e-mail que foi cadastrado no convite e crie uma senha (mínimo 6 caracteres).","Criar minha conta"]}[ownerMode];
+  $("aOwnerTitle").textContent=T[0];$("aOwnerHelp").textContent=T[1];$("aOwnerGo").textContent=T[2];
+  $("aPass2Wrap").hidden=ownerMode==="login";$("aOwnerBack").hidden=!ownerExists;$("aInvite").hidden=ownerMode!=="login";aShow("aOwner")}
+async function ownerGo(){const em=$("aEmail").value.trim().toLowerCase(),pw=$("aPass").value;$("aOwnerErr").textContent="";
   if(!em||!pw){$("aOwnerErr").textContent="Preencha e-mail e senha.";return}
+  if(ownerMode!=="login"&&pw!==$("aPass2").value){$("aOwnerErr").textContent="As senhas não são iguais.";return}
   $("aOwnerGo").disabled=true;
-  try{if(ownerExists)await auth.signInWithEmailAndPassword(em,pw);
-    else{if(pw!==$("aPass2").value){$("aOwnerErr").textContent="As senhas não são iguais.";$("aOwnerGo").disabled=false;return}
-      ownerP=(async()=>{const cr=await auth.createUserWithEmailAndPassword(em,pw);await fs.doc("meta/owner").set({uid:cr.user.uid,email:em,criado:Date.now()})})();
+  try{if(ownerMode==="login")await auth.signInWithEmailAndPassword(em,pw);
+    else if(ownerMode==="create"){ownerP=(async()=>{const cr=await auth.createUserWithEmailAndPassword(em,pw);await fs.doc("meta/owner").set({uid:cr.user.uid,email:em,criado:Date.now()})})();
+      await ownerP;ownerP=null}
+    else{ownerP=(async()=>{const cr=await auth.createUserWithEmailAndPassword(em,pw);
+        try{await fs.doc("admins/"+cr.user.uid).set({email:em,criado:Date.now()})}
+        catch(e){try{await cr.user.delete()}catch(x){}try{await auth.signOut()}catch(x){}throw{code:"sem-convite"}}
+        try{await fs.doc("convites/"+em).delete()}catch(e){}})();
       await ownerP;ownerP=null}}
-  catch(e){ownerP=null;$("aOwnerErr").textContent="Não deu certo: "+errMsg(e)+"."}
+  catch(e){ownerP=null;$("aOwnerErr").textContent=e&&e.code==="sem-convite"?"Esse e-mail não tem convite. Peça para o responsável cadastrar o seu e-mail em Ajustes.":"Não deu certo: "+errMsg(e)+"."}
   $("aOwnerGo").disabled=false}
 async function pinGo(){const pin=$("aPinIn").value.trim();$("aPinErr").textContent="";if(!pin||!pinTarget)return;
   $("aPinGo").disabled=true;
   try{await auth.signInWithEmailAndPassword(pinTarget.email,pinPass(pin))}catch(e){$("aPinErr").textContent=errMsg(e).replace("senha ou PIN incorreto","PIN incorreto")+".";$("aPinIn").value=""}
   $("aPinGo").disabled=false}
-async function onAuth(u){stopData();
+async function onAuth(u){stopData();admT=0;
   state.view="lancar";state.barb=0;state.type="in";state.date=todayISO();state.month=state.date.slice(0,7);state.sheetDay=state.sheetCli=null;
   try{$("cliPick").value="";$("cliInfo").innerHTML="";$("toast").hidden=true;$("sheetBg").hidden=true;$("notice").hidden=true;cfgShownFrom=null;draft=null}catch(e){}
   if(!u){ME.uid=ME.role=ME.bid=null;document.body.classList.remove("role-owner","role-barber");showPick();return}
@@ -678,6 +694,7 @@ async function onAuth(u){stopData();
   const RK="sholla-papel-"+u.uid;let ok=false;
   try{const ow=await fs.doc("meta/owner").get();
     if(ow.exists&&ow.data().uid===u.uid){ME.role="owner";ME.name="Responsável"}
+    else if((await fs.doc("admins/"+u.uid).get()).exists){ME.role="owner";ME.name="Responsável"}
     else{const us=await fs.doc("users/"+u.uid).get();
       if(us.exists&&us.data().role==="barber"&&us.data().ativo){ME.role="barber";ME.bid=us.data().bid}}
     ok=true;try{localStorage.setItem(RK,JSON.stringify({role:ME.role,bid:ME.bid}))}catch(e){}}
@@ -760,7 +777,14 @@ async function backupJSON(){$("bkMsg").textContent="Preparando backup…";try{co
 async function exportCSV(){$("bkMsg").textContent="Preparando planilha…";try{const ents=await allEntries();
   const rows=[["Data","Tipo","Categoria","Descrição","Pagamento","Valor","Barbeiro","Comissão","Cliente"]].concat(ents.sort((a,b)=>a.data<b.data?-1:1).map(e=>[e.data.split("-").reverse().join("/"),({in:"Entrada",out:"Saída",rep:"Pagamento de comissão",brinde:"Cortesia fidelidade"})[e.tipo]||e.tipo,e.categoria,e.descricao,e.pagamento||"",String((+e.valor||0).toFixed(2)).replace(".",","),e.barbeiro||"",e.comissao?String(e.comissao.toFixed(2)).replace(".",","):"",e.clienteNome||""]));
   baixar("caixa-barbearia-"+todayISO()+".csv","﻿"+rows.map(r=>r.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(";")).join("\n"),"text/csv");$("bkMsg").textContent=""}catch(e){$("bkMsg").textContent="Não deu: "+errMsg(e)}}
-function drawBackupInfo(){if(ME.role==="owner")$("accInfo").innerHTML=`Conectado como <b>${esc(ME.email||"")}</b>. Os lançamentos ficam na nuvem e aparecem em todos os aparelhos.`}
+let admT=0;
+async function renderAdmins(force){if(ME.role!=="owner")return;if(!force&&Date.now()-admT<60000)return;admT=Date.now();
+  try{const [ow,ad,cv]=await Promise.all([fs.doc("meta/owner").get(),fs.collection("admins").get(),fs.collection("convites").get()]);
+    const rows=[];if(ow.exists)rows.push(`<div class="kv"><span style="color:var(--fg)">${esc(ow.data().email||"")}</span><small style="color:var(--muted)">principal</small></div>`);
+    ad.docs.forEach(d=>rows.push(`<div class="kv"><span style="color:var(--fg)">${esc(d.data().email||"")}</span><button class="btn ghost" data-admdel="${d.id}" style="min-height:30px;padding:4px 10px;font-size:12px">Remover</button></div>`));
+    cv.docs.forEach(d=>rows.push(`<div class="kv"><span style="color:var(--fg)">${esc(d.id)} <small style="color:var(--warn)">· convite pendente</small></span><button class="btn ghost" data-cvdel="${esc(d.id)}" style="min-height:30px;padding:4px 10px;font-size:12px">Cancelar</button></div>`));
+    $("admList").innerHTML=rows.join("")}catch(e){$("admList").innerHTML=`<p class="err">Não consegui carregar: ${esc(errMsg(e))}</p>`}}
+function drawBackupInfo(){renderAdmins();if(ME.role==="owner")$("accInfo").innerHTML=`Conectado como <b>${esc(ME.email||"")}</b>. Os lançamentos ficam na nuvem e aparecem em todos os aparelhos.`}
 
 /* ---------- cálculos ---------- */
 function monthInfo(){
@@ -1164,6 +1188,8 @@ document.addEventListener("click",async ev=>{
   const t=ev.target.closest("button");if(!t)return;
   if(t.dataset.v){state.view=t.dataset.v;render();window.scrollTo(0,0);return}
   if(t.dataset.lbarb){pinTarget=loginList.find(b=>b.id===t.dataset.lbarb);if(!pinTarget)return;$("aPinName").textContent="Olá, "+pinTarget.n.split(" ")[0]+"!";$("aPinIn").value="";$("aPinErr").textContent="";aShow("aPin");setTimeout(()=>$("aPinIn").focus(),50);return}
+  if(t.dataset.admdel){if(t.dataset.admdel===ME.uid){toast("Você não pode remover o seu próprio acesso.");return}try{await fs.doc("admins/"+t.dataset.admdel).delete();toast("Acesso removido.")}catch(e){toast("Não deu: "+errMsg(e))}renderAdmins(true);return}
+  if(t.dataset.cvdel){try{await fs.doc("convites/"+t.dataset.cvdel).delete()}catch(e){toast("Não deu: "+errMsg(e))}renderAdmins(true);return}
   if(t.dataset.mper){state.mper=t.dataset.mper;renderMeus();return}
   if(t.dataset.pinb){const i=+t.dataset.pini,row=$("pinrow"+i);if(row.querySelector(".pinform"))return;const d=document.createElement("div");d.className="pinform";d.style.cssText="display:flex;gap:6px;flex-wrap:wrap;width:100%";
     d.innerHTML=`<input type="password" id="np${i}" inputmode="numeric" maxlength="8" placeholder="PIN (4 a 8 números)" style="flex:1;min-width:150px;min-height:36px"><button class="btn primary" data-pinsave="${t.dataset.pinb}" data-pini="${i}" style="min-height:36px;padding:6px 12px;font-size:13px">Salvar PIN</button>`;row.appendChild(d);$("np"+i).focus();return}
@@ -1250,7 +1276,10 @@ $("impGo").onclick=async()=>{const b=$("impGo");b.disabled=true;try{const res=aw
   $("impInfo").innerHTML=`<b style="color:var(--in)">Pronto!</b> ${res.n} lançamentos e ${res.c} clientes estão na nuvem. Os dados antigos continuam guardados neste aparelho como cópia de segurança.`;stopData();startData()}
   catch(e){$("impInfo").textContent="Não deu: "+errMsg(e)+". Tente de novo."}b.disabled=false};
 $("accSair").onclick=sair;$("meusSair").onclick=sair;
-$("aGoOwner").onclick=showOwner;$("aOwnerBack").onclick=showPick;$("aOwnerGo").onclick=ownerGo;
+$("aGoOwner").onclick=()=>showOwner("login");$("aInvite").onclick=()=>showOwner("invite");
+$("admAdd").onclick=async()=>{const em=$("admEmail").value.trim().toLowerCase();if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)){$("admMsg").textContent="Digite um e-mail válido.";return}
+  try{await fs.doc("convites/"+em).set({criado:Date.now(),por:ME.email||""});$("admEmail").value="";$("admMsg").textContent="Convite criado. Avise a pessoa para abrir o app e tocar em \"Sou o responsável\" → \"Recebi um convite\".";renderAdmins(true)}
+  catch(e){$("admMsg").textContent="Não deu: "+errMsg(e)}};$("aOwnerBack").onclick=showPick;$("aOwnerGo").onclick=ownerGo;
 $("aPass").onkeydown=e=>{if(e.key==="Enter"&&ownerExists)ownerGo()};$("aPass2").onkeydown=e=>{if(e.key==="Enter")ownerGo()};
 $("aPinGo").onclick=pinGo;$("aPinIn").onkeydown=e=>{if(e.key==="Enter")pinGo()};$("aPinBack").onclick=showPick;
 let lastToday=todayISO();
