@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="pt-BR"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#1C2324">
+<meta name="theme-color" content="#141311">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Sholla">
 <link rel="manifest" href="manifest.webmanifest">
@@ -13,33 +13,22 @@
 <title>Sholla Barbearia · Caixa</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800&family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600&display=swap">
 <style>
 html{padding-top:env(safe-area-inset-top,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}
 /* Layout: app de uma coluna, pensado para celular; barra de abas fixa embaixo, cartões só onde há número importante */
 :root{
-  --bg:#F3F1EC; --surface:#FFFFFF; --surface-2:#E9E6DF; --line:#D8D3C8;
-  --fg:#1C2324; --muted:#5F6866;
-  --accent:#1F4D52; --accent-fg:#FFFFFF; --brass:#A8741F;
-  --in:#1E7A4C; --in-soft:#DDEFE4; --out:#B23A2E; --out-soft:#F6DFDB;
-  --warn:#9A6A00;
-  --f-display:"Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
-  --f-body:"Figtree", "Segoe UI", system-ui, sans-serif;
+  --bg:#141311; --surface:#1D1B18; --surface-2:#2A2723; --line:#2E2B26;
+  --fg:#F2EEE6; --muted:#A39B8E;
+  --accent:#D4A64A; --accent-fg:#141311; --brass:#D4A64A;
+  --in:#5BC48E; --in-soft:#17301F; --out:#E87563; --out-soft:#3A2622;
+  --warn:#E8C27A;
+  --f-display:"Big Shoulders Display", "Arial Narrow", "Segoe UI", system-ui, sans-serif;
+  --f-body:"Manrope", "Segoe UI", system-ui, sans-serif;
   --f-num:"IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
-  --r:12px;
+  --r:18px;
+  color-scheme:dark;
 }
-@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
-  --bg:#121718; --surface:#1A2122; --surface-2:#232C2D; --line:#2F3A3B;
-  --fg:#E8ECEA; --muted:#9AA6A3;
-  --accent:#6FB3B8; --accent-fg:#0E1415; --brass:#D9A54A;
-  --in:#5CC48E; --in-soft:#173126; --out:#EE7B6E; --out-soft:#3A1F1C; --warn:#E0B44C;
-  color-scheme:dark}}
-:root[data-theme="dark"]{
-  --bg:#121718; --surface:#1A2122; --surface-2:#232C2D; --line:#2F3A3B;
-  --fg:#E8ECEA; --muted:#9AA6A3;
-  --accent:#6FB3B8; --accent-fg:#0E1415; --brass:#D9A54A;
-  --in:#5CC48E; --in-soft:#173126; --out:#EE7B6E; --out-soft:#3A1F1C; --warn:#E0B44C;
-  color-scheme:dark}
 html,body{height:100%}
 body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:15px;line-height:1.45}
 *{box-sizing:border-box}
@@ -204,6 +193,62 @@ nav.tabs button[aria-current=page]{color:var(--accent)}
 .toast button{border:0;background:transparent;color:var(--brass);font-weight:700;cursor:pointer;padding:6px}
 .edit-row{display:grid;grid-template-columns:1fr 110px 40px;gap:8px;align-items:center;padding:6px 0}
 .confirm{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:13px}
+/* ---- visual "barbearia à noite" ---- */
+.app{padding-block:0 calc(108px + env(safe-area-inset-bottom,0px))}
+.brand b{text-transform:uppercase;letter-spacing:.04em;font-size:28px;line-height:1}
+.auth .logo b{text-transform:uppercase;letter-spacing:.04em;font-size:32px}
+h2{text-transform:uppercase;letter-spacing:.03em;font-size:22px;line-height:1.05}
+h3{color:var(--muted)}
+.card{border-radius:22px;padding:16px}
+.month{background:var(--surface)}
+.month button{color:var(--fg)}
+input[type=date],input[type=number],input[type=text],input[type=email],input[type=password],select,textarea{background:var(--surface);border:1px solid var(--line);border-radius:14px;color:var(--fg)}
+input[type=email],input[type=password]{padding:10px 12px;min-height:44px;width:100%;font:inherit}
+input::placeholder,textarea::placeholder{color:#7D766B}
+details.card summary{color:var(--fg)}
+.seg{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:5px}
+.seg button{border-radius:11px;color:#CFC8BC}
+.seg button[aria-pressed=true].in{background:var(--accent);color:var(--accent-fg)}
+.seg button[aria-pressed=true].out{background:var(--out);color:#141311}
+.chip{background:var(--surface);color:#CFC8BC}
+#payChips{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:5px}
+#payChips .chip{border:0;background:transparent;border-radius:11px;min-height:40px;padding:8px 4px;font-weight:700;text-align:center}
+#payChips .chip[aria-pressed=true]{background:var(--accent);color:var(--accent-fg)}
+.svc-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+.svc{border-radius:20px;min-height:84px;padding:14px 16px;justify-content:space-between;color:var(--fg)}
+.svc span{font-weight:700;font-size:15px}
+.svc .num{color:var(--accent);font-size:15px}
+.svc:first-child{grid-column:1/-1;background:var(--accent);border-color:var(--accent);color:var(--accent-fg);min-height:92px}
+.svc:first-child span{font-family:var(--f-display);font-weight:800;font-size:32px;text-transform:uppercase;letter-spacing:.02em;line-height:1}
+.svc:first-child .num{color:var(--accent-fg);font-size:18px;font-weight:600}
+.svc:hover{border-color:var(--accent)}
+.btn{border-radius:14px}
+.btn.ghost{background:var(--surface-2);color:var(--fg)}
+.btn.danger{background:var(--out-soft);color:var(--out)}
+.hero{background:var(--surface);color:var(--fg);border:1px solid var(--line);border-radius:24px}
+.hero small{opacity:1;color:var(--muted)}
+.hero .big{font-size:38px;line-height:1}
+.hero .sub .num{font-size:16px}
+#mIn{color:var(--in)} #mOut{color:var(--out)}
+.meter{background:var(--surface-2)}
+.stamps i{border:1.5px dashed #4A453D}
+.stamps i.on{background:var(--accent);border:1.5px solid var(--accent)}
+.reward{background:var(--accent);color:var(--accent-fg);border-radius:16px}
+.kpt div,.bbhead div{border-radius:14px}
+.kplist{border-radius:14px}
+.sheet{border-top:1px solid var(--line);border-radius:24px 24px 0 0}
+.sheet-bg{background:rgba(0,0,0,.6)}
+.sug{box-shadow:0 14px 34px rgba(0,0,0,.5);border-radius:16px}
+.blist button{border-radius:18px;background:var(--surface);color:var(--fg)}
+.blist i{background:transparent;border:1.5px solid var(--accent);color:var(--accent);font-family:var(--f-display);font-size:20px}
+.notice{background:var(--surface-2)}
+.toast{background:#F2EEE6;color:#141311;bottom:calc(98px + env(safe-area-inset-bottom,0px))}
+.toast button{color:#8A6516}
+nav.tabs{left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom,0px));max-width:536px;margin-inline:auto;padding-bottom:0;background:#23211D;border:1px solid #34302A;border-radius:24px;box-shadow:0 12px 32px rgba(0,0,0,.45)}
+nav.tabs button{padding:11px 4px 11px}
+nav.tabs button[aria-current=page]{color:var(--accent);font-weight:800}
+.badge{color:#141311}
+.wa{border-radius:12px}
 @media (prefers-reduced-motion: reduce){*{transition:none!important}}
 </style>
 </head><body>
