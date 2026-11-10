@@ -457,7 +457,7 @@ nav.tabs button[aria-current=page]{color:var(--accent);font-weight:800}
     <div class="card lockbox">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
       <h2>Resumo do mês protegido</h2>
-      <p style="margin:0;color:var(--muted);font-size:13px;max-width:300px">Lucro, faturamento, projeção e comissões ficam visíveis só para o responsável pelo app. Digite a senha para abrir.</p>
+      <p style="margin:0;color:var(--muted);font-size:13px;max-width:300px">Lucro, faturamento, projeção e comissões ficam protegidos. Digite a senha para abrir.</p>
       <input type="password" id="lockPin" inputmode="numeric" autocomplete="off" maxlength="8" aria-label="Senha do mês">
       <button class="btn primary" id="lockGo" style="min-width:160px">Abrir resumo do mês</button>
       <p id="lockMsg" style="margin:0;font-size:13px;color:var(--out);min-height:18px"></p>
@@ -546,6 +546,18 @@ nav.tabs button[aria-current=page]{color:var(--accent);font-weight:800}
     </div>
     <button class="btn primary" id="cfgSave">Salvar ajustes</button>
     <p id="cfgMsg" style="margin:0;color:var(--muted);font-size:13px"></p>
+    <div class="card">
+      <h2 style="margin-bottom:4px">Senha da aba Mês</h2>
+      <p id="pinStatus" style="margin:0 0 10px;color:var(--muted);font-size:13px"></p>
+      <div class="form">
+        <label id="pinCurWrap" class="full">Senha atual<input type="password" id="pinCur" inputmode="numeric" autocomplete="off" maxlength="8"></label>
+        <label>Nova senha (4 a 8 números)<input type="password" id="pinNew" inputmode="numeric" autocomplete="off" maxlength="8"></label>
+        <label>Repita a nova senha<input type="password" id="pinNew2" inputmode="numeric" autocomplete="off" maxlength="8"></label>
+        <button class="btn primary" id="pinSet">Criar senha</button>
+        <button class="btn danger" id="pinDel">Remover senha</button>
+      </div>
+      <p id="pinMsg" style="margin:8px 0 0;font-size:13px;color:var(--muted)"></p>
+    </div>
     <div class="card">
       <h2 style="margin-bottom:4px">Responsáveis</h2>
       <p style="margin:0 0 10px;color:var(--muted);font-size:13px">Quem entra com e-mail e senha e vê tudo: lucro, ajustes e os números de todos. Para dar acesso a outra pessoa, cadastre o e-mail dela. Ela abre o app, toca em "Sou o responsável" → "Recebi um convite" e cria a própria senha.</p>
@@ -745,7 +757,18 @@ async function pinGo(){const pin=$("aPinIn").value.trim();$("aPinErr").textConte
   $("aPinGo").disabled=true;
   try{await auth.signInWithEmailAndPassword(pinTarget.email,pinPass(pin))}catch(e){$("aPinErr").textContent=errMsg(e).replace("senha ou PIN incorreto","PIN incorreto")+".";$("aPinIn").value=""}
   $("aPinGo").disabled=false}
-async function onAuth(u){stopData();admT=0;
+async function hashPin(p){const txt="sholla-mes:"+p;
+  try{if(window.crypto&&crypto.subtle&&window.TextEncoder){const b=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(txt));return Array.from(new Uint8Array(b)).map(x=>x.toString(16).padStart(2,"0")).join("")}}catch(e){}
+  let h=5381;for(let i=0;i<txt.length;i++)h=((h<<5)+h+txt.charCodeAt(i))|0;return "x"+(h>>>0).toString(16)}
+function pinKey(){return "sholla-pinmes-"+ME.uid}
+async function loadPin(){try{ME.pinMes=localStorage.getItem(pinKey())||""}catch(e){}
+  try{const d=await fs.doc("users/"+ME.uid).get();ME.pinMes=(d.exists&&d.data().pinMes)||"";try{localStorage.setItem(pinKey(),ME.pinMes)}catch(e){}}catch(e){}
+  renderPin();if(state.view==="mes"&&ME.pinMes&&!state.mesOpen){state.view="lock";render()}}
+async function savePin(h){await fs.doc("users/"+ME.uid).set({role:"owner",pinMes:h},{merge:true});ME.pinMes=h;try{localStorage.setItem(pinKey(),h)}catch(e){}}
+function renderPin(){if(ME.role!=="owner")return;const on=!!ME.pinMes;
+  $("pinStatus").textContent=on?"A aba Mês está protegida: pede a senha toda vez que alguém abre. Para trocar ou remover, digite a senha atual.":"Sem senha: quem estiver com o app aberto vê o lucro, o faturamento e as comissões. Crie uma senha para proteger a aba Mês.";
+  $("pinCurWrap").hidden=!on;$("pinDel").hidden=!on;$("pinSet").textContent=on?"Trocar senha":"Criar senha"}
+async function onAuth(u){stopData();admT=0;ME.pinMes="";
   state.view="lancar";state.barb=0;state.type="in";state.date=todayISO();state.month=state.date.slice(0,7);state.sheetDay=state.sheetCli=null;
   try{$("cliPick").value="";$("cliInfo").innerHTML="";$("toast").hidden=true;$("sheetBg").hidden=true;$("notice").hidden=true;cfgShownFrom=null;draft=null}catch(e){}
   if(!u){ME.uid=ME.role=ME.bid=null;document.body.classList.remove("role-owner","role-barber");showPick();return}
@@ -765,7 +788,7 @@ async function onAuth(u){stopData();admT=0;
   $("whoName").textContent=ME.role==="owner"?"Responsável":"";
   if(ME.role==="barber"&&["mes","hist","ajustes"].includes(state.view))state.view="lancar";
   if(ME.role==="barber")state.type="in";
-  $("authBox").hidden=true;startData();checkImport()}
+  $("authBox").hidden=true;state.mesOpen=false;if(ME.role==="owner")loadPin();startData();checkImport()}
 function sair(){auth.signOut()}
 
 function boot(){
@@ -868,7 +891,7 @@ function render(){
   const navV=state.view==="lock"?"mes":state.view;
   document.querySelectorAll("nav.tabs button").forEach(b=>{if(b.dataset.v===navV)b.setAttribute("aria-current","page");else b.removeAttribute("aria-current")});
   if(!ME.role)return;
-  renderLancar();if(ME.role==="owner"){renderMes();renderHist();renderAjustesOnce();drawBackupInfo()}else renderMeus();renderClientes();renderReminders();
+  renderLancar();if(ME.role==="owner"){renderMes();renderHist();renderAjustesOnce();drawBackupInfo();renderPin()}else renderMeus();renderClientes();renderReminders();
   if(state.sheetDay)openDay(state.sheetDay);
   if(state.sheetCli)openClient(state.sheetCli);
 }
@@ -1261,7 +1284,8 @@ document.addEventListener("click",ev=>{const r=ev.target.closest&&ev.target.clos
   const a=ev.target.closest&&ev.target.closest("a[data-sent]");if(a){const id=a.dataset.sent;setTimeout(()=>{markReminded(id);toast("Lembrete marcado como enviado.");render()},800)}});
 document.addEventListener("click",async ev=>{
   const t=ev.target.closest("button");if(!t)return;
-  if(t.dataset.v){state.view=t.dataset.v;render();window.scrollTo(0,0);return}
+  if(t.dataset.v){let v=t.dataset.v;if(v==="mes"&&ME.role==="owner"&&ME.pinMes&&!state.mesOpen){v="lock";$("lockPin").value="";$("lockMsg").textContent=""}
+    if(v!=="mes"&&v!=="lock")state.mesOpen=false;state.view=v;render();window.scrollTo(0,0);if(v==="lock")setTimeout(()=>$("lockPin").focus(),50);return}
   if(t.dataset.lbarb){pinTarget=loginList.find(b=>b.id===t.dataset.lbarb);if(!pinTarget)return;$("aPinName").textContent="Olá, "+pinTarget.n.split(" ")[0]+"!";$("aPinIn").value="";$("aPinErr").textContent="";aShow("aPin");setTimeout(()=>$("aPinIn").focus(),50);return}
   if(t.dataset.admdel){if(t.dataset.admdel===ME.uid){toast("Você não pode remover o seu próprio acesso.");return}try{await fs.doc("admins/"+t.dataset.admdel).delete();toast("Acesso removido.")}catch(e){toast("Não deu: "+errMsg(e))}renderAdmins(true);return}
   if(t.dataset.cvdel){try{await fs.doc("convites/"+t.dataset.cvdel).delete()}catch(e){toast("Não deu: "+errMsg(e))}renderAdmins(true);return}
@@ -1351,6 +1375,18 @@ $("impGo").onclick=async()=>{const b=$("impGo");b.disabled=true;try{const res=aw
   $("impInfo").innerHTML=`<b style="color:var(--in)">Pronto!</b> ${res.n} lançamentos e ${res.c} clientes estão na nuvem. Os dados antigos continuam guardados neste aparelho como cópia de segurança.`;stopData();startData()}
   catch(e){$("impInfo").textContent="Não deu: "+errMsg(e)+". Tente de novo."}b.disabled=false};
 $("accSair").onclick=sair;$("meusSair").onclick=sair;
+async function tryUnlock(){const p=$("lockPin").value.trim();if(!p)return;
+  if(await hashPin(p)===ME.pinMes){state.mesOpen=true;state.view="mes";$("lockPin").value="";render();window.scrollTo(0,0)}
+  else{$("lockMsg").textContent="Senha incorreta.";$("lockPin").value="";$("lockPin").focus()}}
+$("lockGo").onclick=tryUnlock;$("lockPin").onkeydown=e=>{if(e.key==="Enter")tryUnlock()};
+$("pinSet").onclick=async()=>{const n=$("pinNew").value.trim(),n2=$("pinNew2").value.trim();
+  if(ME.pinMes&&await hashPin($("pinCur").value.trim())!==ME.pinMes){$("pinMsg").textContent="A senha atual está errada.";return}
+  if(!/^\d{4,8}$/.test(n)){$("pinMsg").textContent="Use de 4 a 8 números.";return}
+  if(n!==n2){$("pinMsg").textContent="As duas senhas novas não são iguais.";return}
+  try{await savePin(await hashPin(n));["pinCur","pinNew","pinNew2"].forEach(i=>$(i).value="");state.mesOpen=false;$("pinMsg").textContent="Senha salva. Ela vale em todos os aparelhos em que você entra com o seu e-mail.";renderPin()}
+  catch(e){$("pinMsg").textContent="Não deu: "+errMsg(e)}};
+$("pinDel").onclick=async()=>{if(await hashPin($("pinCur").value.trim())!==ME.pinMes){$("pinMsg").textContent="Digite a senha atual para remover.";return}
+  try{await savePin("");["pinCur","pinNew","pinNew2"].forEach(i=>$(i).value="");$("pinMsg").textContent="Senha removida.";renderPin()}catch(e){$("pinMsg").textContent="Não deu: "+errMsg(e)}};
 $("aGoOwner").onclick=()=>showOwner("login");$("aInvite").onclick=()=>showOwner("invite");
 $("admAdd").onclick=async()=>{const em=$("admEmail").value.trim().toLowerCase();if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)){$("admMsg").textContent="Digite um e-mail válido.";return}
   try{await fs.doc("convites/"+em).set({criado:Date.now(),por:ME.email||""});$("admEmail").value="";$("admMsg").textContent="Convite criado. Avise a pessoa para abrir o app e tocar em \"Sou o responsável\" → \"Recebi um convite\".";renderAdmins(true)}
