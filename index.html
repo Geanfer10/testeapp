@@ -520,7 +520,7 @@ nav.tabs button[aria-current=page]{color:var(--accent);font-weight:800}
     </div>
     <div class="card">
       <h2 style="margin-bottom:4px">Barbeiros e comissão</h2>
-      <p style="margin:0 0 10px;color:var(--muted);font-size:13px">Coloque a % que cada um recebe por serviço. O dono fica com 0%. A comissão vale para cortes, barba e demais serviços; produtos vendidos e gorjetas não entram. Para o barbeiro lançar pelo celular, salve os ajustes e toque em <b>Criar PIN</b> ao lado do nome.</p>
+      <p style="margin:0 0 10px;color:var(--muted);font-size:13px">Coloque a % que cada um recebe por serviço. O dono fica com 0%. A comissão vale para cortes, barba e demais serviços; produtos vendidos não entram. Gorjeta lançada em "Outro valor" vai 100% para o barbeiro selecionado. Para o barbeiro lançar pelo celular, salve os ajustes e toque em <b>Criar PIN</b> ao lado do nome.</p>
       <div id="barbEdit"></div>
       <button class="btn ghost" id="barbAdd" style="margin-top:8px">+ Adicionar barbeiro</button>
     </div>
@@ -867,7 +867,7 @@ function cleanEntry(e){const x=Object.assign({},e);delete x.criadoTs;return x}
 async function backupJSON(){$("bkMsg").textContent="Preparando backup…";try{const ents=await allEntries();
   baixar("caixa-barbearia-backup-"+todayISO()+".json",JSON.stringify({entries:ents.map(cleanEntry),clients:clients().map(c=>Object.assign({},c)),cfg:state.cfg}),"application/json");$("bkMsg").textContent="Backup baixado com "+ents.length+" lançamentos."}catch(e){$("bkMsg").textContent="Não deu: "+errMsg(e)}}
 async function exportCSV(){$("bkMsg").textContent="Preparando planilha…";try{const ents=await allEntries();
-  const rows=[["Data","Tipo","Categoria","Descrição","Pagamento","Valor","Barbeiro","Comissão","Cliente"]].concat(ents.sort((a,b)=>a.data<b.data?-1:1).map(e=>[e.data.split("-").reverse().join("/"),({in:"Entrada",out:"Saída",rep:"Pagamento de comissão",brinde:"Cortesia fidelidade"})[e.tipo]||e.tipo,e.categoria,e.descricao,e.pagamento||"",String((+e.valor||0).toFixed(2)).replace(".",","),e.barbeiro||"",e.comissao?String(e.comissao.toFixed(2)).replace(".",","):"",e.clienteNome||""]));
+  const rows=[["Data","Tipo","Categoria","Descrição","Pagamento","Valor","Barbeiro","Comissão","Cliente"]].concat(ents.sort((a,b)=>a.data<b.data?-1:1).map(e=>[e.data.split("-").reverse().join("/"),({in:"Entrada",out:"Saída",rep:"Pagamento de comissão",brinde:"Cortesia fidelidade"})[e.tipo]||e.tipo,e.categoria,e.descricao,e.pagamento||"",String((+e.valor||0).toFixed(2)).replace(".",","),e.barbeiro||"",comOf(e)?String(comOf(e).toFixed(2)).replace(".",","):"",e.clienteNome||""]));
   baixar("caixa-barbearia-"+todayISO()+".csv","﻿"+rows.map(r=>r.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(";")).join("\n"),"text/csv");$("bkMsg").textContent=""}catch(e){$("bkMsg").textContent="Não deu: "+errMsg(e)}}
 let admT=0;
 async function renderAdmins(force){if(ME.role!=="owner")return;if(!force&&Date.now()-admT<60000)return;admT=Date.now();
@@ -889,7 +889,9 @@ function monthInfo(){
   for(let d=1;d<=days;d++){const wd=new Date(y,m-1,d).getDay();if(!off.includes(wd)){work++;if(d<=elapsed)workDone++}}
   return{y,m,days,elapsed,work,workDone};
 }
-function sums(list){let i=0,o=0,c=0;list.forEach(e=>{if(e.tipo==="in"||e.tipo==="brinde"){i+=e.tipo==="in"?e.valor:0;c+=e.comissao||0}else if(e.tipo==="out")o+=e.valor});o+=c;return{i,o,c,b:i-o}}
+function isGorj(e){return e.tipo==="in"&&e.categoria==="Gorjeta"&&!!e.barbeiro}
+function comOf(e){return isGorj(e)?(+e.valor||0):(e.comissao||0)}
+function sums(list){let i=0,o=0,c=0;list.forEach(e=>{if(e.tipo==="in"||e.tipo==="brinde"){i+=e.tipo==="in"?e.valor:0;c+=comOf(e)}else if(e.tipo==="out")o+=e.valor});o+=c;return{i,o,c,b:i-o}}
 function barbers(){return (state.cfg.barbers&&state.cfg.barbers.length)?state.cfg.barbers:[{n:"Dono",p:0}]}
 
 /* ---------- render ---------- */
@@ -929,7 +931,7 @@ function renderLancar(){
 }
 function canDel(e){if(ME.role==="owner")return true;return ME.role==="barber"&&e.bid===ME.bid&&e.tipo!=="rep"&&(Date.now()-(e.criado||0))<20*3600e3}
 function rowHTML(e){
-  const sub=[e.tipo==="rep"?null:e.categoria,e.barbeiro&&barbers().length>1||e.comissao?e.barbeiro:null,e.pagamento,e.comissao?esc(e.barbeiro)+" "+brl(e.comissao)+" / casa "+brl(e.valor-e.comissao):null,e.clienteNome?"👤 "+e.clienteNome:null].filter(Boolean).join(" · ");
+  const sub=[e.tipo==="rep"?null:e.categoria,e.barbeiro&&barbers().length>1||comOf(e)?e.barbeiro:null,e.pagamento,isGorj(e)?"gorjeta 100% de "+esc(e.barbeiro):e.comissao?esc(e.barbeiro)+" "+brl(e.comissao)+" / casa "+brl(e.valor-e.comissao):null,e.clienteNome?"👤 "+e.clienteNome:null].filter(Boolean).join(" · ");
   return `<div class="row"><i class="dot ${e.tipo}"></i><div class="desc"><b>${esc(e.descricao||e.categoria)}</b><small>${esc(sub)}</small></div>
   <span class="num val ${e.tipo}">${e.tipo==="brinde"?"grátis":(e.tipo==="in"?"+":"−")+brl(e.valor).replace("R$ ","")}</span>
   ${canDel(e)?`<button class="x" data-del="${e.id}" aria-label="Apagar lançamento">×</button>`:"<span></span>"}</div>`;
@@ -937,7 +939,7 @@ function rowHTML(e){
 
 function heroChartSVG(all,mi){
   const n=Math.max(1,mi.elapsed||mi.days),acc=[];let run=0;const byD=new Array(mi.days+1).fill(0);
-  all.forEach(e=>{const d=+e.data.slice(8);if(e.tipo==="in")byD[d]+=e.valor;else if(e.tipo==="out")byD[d]-=e.valor;if(e.tipo==="in"||e.tipo==="brinde")byD[d]-=e.comissao||0});
+  all.forEach(e=>{const d=+e.data.slice(8);if(e.tipo==="in")byD[d]+=e.valor;else if(e.tipo==="out")byD[d]-=e.valor;if(e.tipo==="in"||e.tipo==="brinde")byD[d]-=comOf(e)});
   for(let d=1;d<=n;d++){run+=byD[d]||0;acc.push(run)}
   if(acc.length<2||acc.every(v=>v===0))return"";
   const W=320,H=70,P=6,mn=Math.min(0,...acc),mx=Math.max(...acc,1),sx=i=>P+i*(W-2*P)/(acc.length-1),sy=v=>H-P-(v-mn)/(mx-mn||1)*(H-2*P);
@@ -986,7 +988,7 @@ function renderMes(){
   // gráfico
   drawChart(mi);
   // categorias
-  const outList=all.filter(e=>e.tipo==="out").concat(all.filter(e=>e.comissao>0).map(e=>({categoria:"Comissões de barbeiros",valor:e.comissao})));
+  const outList=all.filter(e=>e.tipo==="out").concat(all.filter(e=>comOf(e)>0).map(e=>({categoria:isGorj(e)?"Gorjetas repassadas":"Comissões de barbeiros",valor:comOf(e)})));
   $("catOut").innerHTML=catHTML(outList,"categoria","var(--out)");
   renderCom(all);
   renderKP();
@@ -1003,7 +1005,7 @@ function catHTML(list,key,color){
 function drawChart(mi){
   const W=640,H=200,L=44,R=8,T=10,B=24, days=mi.days;
   const byDay=Array.from({length:days},()=>({i:0,o:0}));
-  state.entries.forEach(e=>{const d=Number(e.data.slice(8))-1;if(!byDay[d])return;if(e.tipo==="in"||e.tipo==="brinde"){byDay[d].i+=e.tipo==="in"?e.valor:0;byDay[d].o+=e.comissao||0}else if(e.tipo==="out")byDay[d].o+=e.valor});
+  state.entries.forEach(e=>{const d=Number(e.data.slice(8))-1;if(!byDay[d])return;if(e.tipo==="in"||e.tipo==="brinde"){byDay[d].i+=e.tipo==="in"?e.valor:0;byDay[d].o+=comOf(e)}else if(e.tipo==="out")byDay[d].o+=e.valor});
   let max=Math.max(10,...byDay.map(d=>Math.max(d.i,d.o)));
   const step=niceStep(max/4);max=Math.ceil(max/step)*step;
   const y=v=>T+(H-T-B)*(1-v/max), cw=(W-L-R)/days, bw=Math.max(2,cw/2-1.5);
@@ -1056,14 +1058,14 @@ function renderKP(){
   const h1=k.h1===""?null:+k.h1,h2=k.h2===""?null:+k.h2,useH=h1!==null||h2!==null;
   const R_=entriesRange(a,b);if(R_.loading){$("kpBox").innerHTML=`<div class="empty" style="padding:8px">Carregando lançamentos do período…</div>`;return}
   const list=R_.list.filter(e=>isAtend(e)&&e.data>=a&&e.data<=b&&(!k.barb||(e.barbeiro||"Sem barbeiro")===k.barb)&&(!useH||(()=>{const h=hourOf(e);return h!==null&&(h1===null||h>=h1)&&(h2===null||h<=h2)})()));
-  const fat=list.reduce((s,e)=>s+(e.tipo==="in"?e.valor:0),0),com=list.reduce((s,e)=>s+(e.comissao||0),0),pagos=list.filter(e=>e.tipo==="in").length;
+  const fat=list.reduce((s,e)=>s+(e.tipo==="in"?e.valor:0),0),com=list.reduce((s,e)=>s+(comOf(e)),0),pagos=list.filter(e=>e.tipo==="in").length;
   const days=Math.max(1,Math.round((new Date(b+"T12:00")-new Date(a+"T12:00"))/864e5)+1);
   let html=`<div class="kpt"><div><small>Atendimentos</small><span class="num">${list.length}</span></div>
    <div><small>Faturamento</small><span class="num">${brl(fat)}</span></div>
    <div><small>Ticket médio</small><span class="num">${brl(pagos?fat/pagos:0)}</span></div>
    <div><small>Comissões</small><span class="num">${brl(com)}</span></div></div>`;
   if(!list.length){$("kpBox").innerHTML=html+`<div class="empty" style="padding:8px">Nenhum atendimento ${lbl}${useH?" nesse horário":""}.</div>`;return}
-  const g={};list.forEach(e=>{const n=e.barbeiro||"Sem barbeiro";(g[n]=g[n]||{n,q:0,fat:0,com:0,items:[]});g[n].q++;if(e.tipo==="in")g[n].fat+=e.valor;g[n].com+=e.comissao||0;g[n].items.push(e)});
+  const g={};list.forEach(e=>{const n=e.barbeiro||"Sem barbeiro";(g[n]=g[n]||{n,q:0,fat:0,com:0,items:[]});g[n].q++;if(e.tipo==="in")g[n].fat+=e.valor;g[n].com+=comOf(e);g[n].items.push(e)});
   const arr=Object.values(g).sort((x,y)=>y.q-x.q),max=Math.max(...arr.map(x=>x.q));
   html+=`<h3 style="margin-top:4px">Por barbeiro <span style="text-transform:none;letter-spacing:0;font-weight:500">· toque para ver os atendimentos</span></h3>`+arr.map(x=>{const op=k.open===x.n;
     return`<div class="bb"><button class="kpbarb" data-kbarb="${esc(x.n)}" aria-expanded="${op}"><b style="font-weight:700">${op?"▾":"▸"} ${esc(x.n)}</b><br>
@@ -1126,7 +1128,7 @@ function renderMeus(){
   const R_=entriesRange(a,b);
   if(R_.loading){$("meusBox").innerHTML=`<div class="empty" style="padding:8px">Carregando…</div>`;$("meusList").innerHTML="";return}
   const mine=R_.list.filter(e=>e.bid===ME.bid),at=mine.filter(isAtend);
-  const fat=at.reduce((x,e)=>x+(e.tipo==="in"?e.valor:0),0),com=mine.reduce((x,e)=>x+((e.tipo==="in"||e.tipo==="brinde")?(e.comissao||0):0),0),pago=mine.filter(e=>e.tipo==="rep").reduce((x,e)=>x+e.valor,0);
+  const fat=at.reduce((x,e)=>x+(e.tipo==="in"?e.valor:0),0),com=mine.reduce((x,e)=>x+((e.tipo==="in"||e.tipo==="brinde")?(comOf(e)):0),0),pago=mine.filter(e=>e.tipo==="rep").reduce((x,e)=>x+e.valor,0);
   const b0=barbers().find(x=>x.id===ME.bid);
   $("meusBox").innerHTML=`<h3>${esc(ME.name||"Meus números")} ${b0&&b0.p?`· comissão ${b0.p}%`:""}</h3><div class="kpt"><div><small>Atendimentos</small><span class="num">${at.length}</span></div>
     <div><small>Faturei</small><span class="num">${brl(fat)}</span></div>
@@ -1134,23 +1136,23 @@ function renderMeus(){
     <div><small>Já recebi</small><span class="num">${brl(pago)}</span></div></div>
     ${per==="mes"?`<div class="kv" style="font-weight:700"><span style="color:var(--fg)">A receber neste mês</span><span class="num ${com-pago>0?"pos":""}">${brl(Math.max(0,com-pago))}</span></div>`:""}`;
   const rows=mine.filter(e=>e.tipo!=="out").sort((p,q)=>(q.data+(q.criado||0))>(p.data+(p.criado||0))?1:-1);
-  $("meusList").innerHTML=rows.length?rows.map(e=>{const h=hourOf(e);return`<div class="row"><i class="dot ${e.tipo}"></i><div class="desc"><b>${esc(e.descricao||e.categoria)}</b><small>${e.data.split("-").reverse().slice(0,2).join("/")}${h!==null?" · "+pad(h)+"h"+pad(new Date(e.criado).getMinutes()):""}${e.clienteNome?" · "+esc(e.clienteNome):""}${e.comissao?" · comissão "+brl(e.comissao):""}</small></div>
+  $("meusList").innerHTML=rows.length?rows.map(e=>{const h=hourOf(e);return`<div class="row"><i class="dot ${e.tipo}"></i><div class="desc"><b>${esc(e.descricao||e.categoria)}</b><small>${e.data.split("-").reverse().slice(0,2).join("/")}${h!==null?" · "+pad(h)+"h"+pad(new Date(e.criado).getMinutes()):""}${e.clienteNome?" · "+esc(e.clienteNome):""}${isGorj(e)?" · gorjeta (100% sua)":e.comissao?" · comissão "+brl(e.comissao):""}</small></div>
     <span class="num val ${e.tipo}">${e.tipo==="brinde"?"grátis":(e.tipo==="rep"?"recebi ":"+")+brl(e.valor).replace("R$ ","")}</span><span></span></div>`}).join(""):`<div class="empty">Nenhum atendimento ${lbl}.</div>`;
 }
 function renderCom(all){
   const bs=barbers(), g={};
-  bs.forEach(b=>g[b.n]={n:b.n,p:b.p,at:0,fat:0,com:0,pago:0});
-  all.forEach(e=>{const k=e.barbeiro;if(!k)return;g[k]=g[k]||{n:k,p:null,at:0,fat:0,com:0,pago:0};
+  bs.forEach(b=>g[b.n]={n:b.n,p:b.p,at:0,fat:0,com:0,pago:0,gj:0});
+  all.forEach(e=>{const k=e.barbeiro;if(!k)return;g[k]=g[k]||{n:k,p:null,at:0,fat:0,com:0,pago:0,gj:0};if(isGorj(e))g[k].gj+=e.valor;
     if(e.tipo==="in"&&e.categoria==="Serviço"){if(!e.semSelo)g[k].at++;g[k].fat+=e.valor}
     if(e.tipo==="brinde")g[k].at++;
-    if(e.tipo==="in"||e.tipo==="brinde")g[k].com+=e.comissao||0;
+    if(e.tipo==="in"||e.tipo==="brinde")g[k].com+=comOf(e);
     if(e.tipo==="rep")g[k].pago+=e.valor});
   const arr=Object.values(g).filter(x=>x.p>0||x.com>0||x.pago>0);
   $("comCard").hidden=!arr.length&&bs.length<2;
   if(!arr.length){$("comBox").innerHTML=`<div class="empty" style="padding:8px">Cadastre os barbeiros e a % de cada um em Ajustes.</div>`;return}
   $("comBox").innerHTML=arr.map(x=>{const falta=Math.round((x.com-x.pago)*100)/100;
     return`<div class="barb"><b>${esc(x.n)}${x.p!=null?` <small>· ${x.p}%</small>`:""}</b><span class="num ${falta>0?"neg":""}">${falta>0?"a pagar "+brl(falta):"em dia"}</span>
-    <small>${x.at} serviços · faturou ${brl(x.fat)} · parte dele ${brl(x.com)} · parte da casa ${brl(x.fat-x.com)} · já pago ${brl(x.pago)}</small>
+    <small>${x.at} serviços · faturou ${brl(x.fat)} · parte dele ${brl(x.com-x.gj)} · parte da casa ${brl(x.fat-(x.com-x.gj))}${x.gj?` · gorjetas ${brl(x.gj)}`:""} · já pago ${brl(x.pago)}</small>
     ${falta>0&&state.canWrite?`<button class="btn ghost" data-pagar="${esc(x.n)}" data-valor="${falta}" style="min-height:34px;padding:6px 12px;font-size:13px">Registrar pagamento</button>`:"<span></span>"}</div>`}).join("");
 }
 function selectedClient(){const v=($("cliPick").value||"").trim().toLowerCase();if(!v)return null;return clients().find(c=>c.n.toLowerCase()===v)||null}
